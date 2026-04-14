@@ -2,84 +2,172 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
 <meta name="theme-color" content="#05070d"/>
-<meta name="apple-mobile-web-app-capable" content="yes"/>
-<meta name="mobile-web-app-capable" content="yes"/>
-<title>Killer Horde</title>
-<link rel="stylesheet" href="css/style.css"/>
+<title>Killer Horde — Survive the swarm. One thumb. Forever.</title>
+<meta name="description" content="A one-thumb survivors-like for your commute. Procedural weapons, heroes, biomes and a meta-progression tree that keeps pulling you back."/>
+<meta property="og:title" content="Killer Horde"/>
+<meta property="og:description" content="Survive the swarm. One thumb. Forever."/>
+<meta property="og:type" content="website"/>
+<link rel="stylesheet" href="css/landing.css"/>
 </head>
 <body>
-<div id="game">
-  <canvas id="cv"></canvas>
 
-  <div id="hud">
-    <div id="top">
-      <div id="hpbar"><div id="hpfill"></div></div>
-      <div id="xpbar"><div id="xpfill"></div></div>
-      <div id="stats">
-        <span id="time">00:00</span>
-        <span id="lvl">Lv 1</span>
-        <span id="kills">x 0</span>
-        <span id="gold">+ 0</span>
-      </div>
+<canvas id="bg"></canvas>
+
+<header class="nav">
+  <div class="brand">KILLER<span>HORDE</span></div>
+  <nav>
+    <a href="#features">Features</a>
+    <a href="#depth">Depth</a>
+    <a href="#how">How to play</a>
+    <a class="cta-mini" href="play.html">Play</a>
+  </nav>
+</header>
+
+<main>
+
+<section class="hero">
+  <div class="hero-inner">
+    <div class="tag">FREE &middot; BROWSER &middot; NO INSTALL</div>
+    <h1>SURVIVE<br/><span>THE SWARM.</span></h1>
+    <p class="lede">A one-thumb survivors-like built for the 3&nbsp;minutes<br/>between stations. 15,000+ build combos. Months of runs.</p>
+    <div class="cta-row">
+      <a class="cta" href="play.html">PLAY NOW &rarr;</a>
+      <a class="cta ghost" href="#features">WHY IT'S ADDICTIVE</a>
     </div>
-    <div id="joy"><div id="stick"></div></div>
-    <button id="pauseBtn" type="button">II</button>
+    <div class="badges">
+      <div><b>6</b><span>WEAPONS</span></div>
+      <div><b>8</b><span>PASSIVES</span></div>
+      <div><b>6</b><span>HEROES</span></div>
+      <div><b>5</b><span>BIOMES</span></div>
+      <div><b>1</b><span>THUMB</span></div>
+    </div>
   </div>
+</section>
 
-  <div id="menu" class="screen show">
-    <h1>KILLER<span>HORDE</span></h1>
-    <p class="sub">Survive the swarm. One thumb. Forever.</p>
-    <button data-act="play">PLAY</button>
-    <button data-act="meta">UPGRADES</button>
-    <button data-act="chars">HEROES</button>
-    <button data-act="biomes">BIOMES</button>
-    <div class="hint">Drag anywhere to move. You auto-attack. Hold to keep moving.</div>
+<section id="features" class="features">
+  <h2>Designed for 2&ndash;15 minute runs</h2>
+  <p class="sub">Every ingredient that makes a game compulsive on a crowded metro, dialed to 11.</p>
+  <div class="grid">
+    <div class="card">
+      <div class="ico">&#x2022;</div>
+      <h3>One-thumb controls</h3>
+      <p>Drag <em>anywhere</em> on the screen and a floating joystick appears. Weapons auto-fire. Your only job is positioning.</p>
+    </div>
+    <div class="card">
+      <div class="ico">&#x25CE;</div>
+      <h3>Instant power fantasy</h3>
+      <p>You start weak. Thirty seconds in, an orbit of blades is shredding a hundred enemies. By minute three you are the storm.</p>
+    </div>
+    <div class="card">
+      <div class="ico">&#x2736;</div>
+      <h3>Random level-up picks</h3>
+      <p>Every level, choose 1 of 3 weapons or passives. 15,000+ build combinations. Two runs are never the same.</p>
+    </div>
+    <div class="card">
+      <div class="ico">&#x2736;</div>
+      <h3>Scaling hordes</h3>
+      <p>Waves get denser, enemies get meaner, and a boss drops every 90 seconds. Flow state, guaranteed.</p>
+    </div>
+    <div class="card">
+      <div class="ico">&#x25C6;</div>
+      <h3>Meta-progression tree</h3>
+      <p>Spend gold between runs on 8 upgrades with 2&ndash;5 levels each. Permanent power creep keeps every death meaningful.</p>
+    </div>
+    <div class="card">
+      <div class="ico">&#x2605;</div>
+      <h3>Pause anywhere</h3>
+      <p>Train arrived? Hit pause. Screen off. Come back tomorrow. Your meta-progression is always saved locally.</p>
+    </div>
   </div>
+</section>
 
-  <div id="levelup" class="screen">
-    <h2>LEVEL UP</h2>
-    <div id="choices"></div>
-    <button id="rerollBtn" data-act="reroll" style="display:none">REROLL (<span id="rerollN">0</span>)</button>
+<section id="depth" class="depth">
+  <h2>Months of procedural depth</h2>
+  <p class="sub">Unlock it slowly. Chase one milestone at a time.</p>
+
+  <div class="columns">
+    <div class="col">
+      <h3>6 heroes</h3>
+      <ul class="list">
+        <li><b>Rogue</b> &mdash; nimble blade thrower <span>free</span></li>
+        <li><b>Arc Mage</b> &mdash; homing devastation <span>reach Lv 20</span></li>
+        <li><b>Warden</b> &mdash; burning aura, thick hide <span>1000 kills</span></li>
+        <li><b>Storm</b> &mdash; thunder incarnate <span>survive 5:00</span></li>
+        <li><b>Nova</b> &mdash; explosive heart <span>unlock 2 biomes</span></li>
+        <li><b>Duelist</b> &mdash; whirling blades <span>5000 gold earned</span></li>
+      </ul>
+    </div>
+    <div class="col">
+      <h3>5 biomes</h3>
+      <ul class="list">
+        <li><b>Night City</b> &mdash; the starter swarm</li>
+        <li><b>Rust Desert</b> &mdash; runners and exploders</li>
+        <li><b>Glacier Rift</b> &mdash; tanks, shooters, ice</li>
+        <li><b>Inferno</b> &mdash; bombs raining in</li>
+        <li><b>The Void</b> &mdash; everything, everywhere</li>
+      </ul>
+      <p class="note">Each biome unlocks by surviving 5 minutes in the previous one.</p>
+    </div>
+    <div class="col">
+      <h3>6 weapons &times; 5 levels</h3>
+      <ul class="list">
+        <li><b>Shard</b> &mdash; fires in your direction of travel</li>
+        <li><b>Seeker</b> &mdash; homing bolts</li>
+        <li><b>Orbit</b> &mdash; rotating blades around you</li>
+        <li><b>Aura</b> &mdash; burns what stands too close</li>
+        <li><b>Nova</b> &mdash; expanding shockwave ring</li>
+        <li><b>Thunder</b> &mdash; sky strikes on random foes</li>
+      </ul>
+    </div>
+    <div class="col">
+      <h3>8 passives &times; 4&ndash;5 levels</h3>
+      <ul class="list">
+        <li><b>Might</b> +8% damage</li>
+        <li><b>Vigor</b> +15 max HP</li>
+        <li><b>Swift</b> +6% move speed</li>
+        <li><b>Haste</b> &minus;7% cooldowns</li>
+        <li><b>Magnet</b> +30% pickup range</li>
+        <li><b>Fortune</b> +15% gold &amp; XP</li>
+        <li><b>Armor</b> &minus;1 damage per hit</li>
+        <li><b>Regen</b> +0.6 HP / sec</li>
+      </ul>
+    </div>
   </div>
+</section>
 
-  <div id="gameover" class="screen">
-    <h2>YOU DIED</h2>
-    <div id="summary"></div>
-    <button data-act="retry">PLAY AGAIN</button>
-    <button data-act="home">HOME</button>
+<section id="how" class="how">
+  <h2>How to play</h2>
+  <div class="steps">
+    <div class="step"><b>1</b><p>Drag anywhere on the screen to move. Your character auto-attacks whatever is closest.</p></div>
+    <div class="step"><b>2</b><p>Walk over glowing gems to gain XP. On level up, pick one of three random upgrades.</p></div>
+    <div class="step"><b>3</b><p>Survive the boss every 90 seconds. Stay alive for 5 minutes to unlock the next biome.</p></div>
+    <div class="step"><b>4</b><p>Die. Keep the gold. Spend it on permanent upgrades. Pick a new hero. Go again.</p></div>
   </div>
+  <p class="desk">Desktop works too &mdash; <b>WASD</b> or arrow keys. <b>Esc</b> pauses.</p>
+</section>
 
-  <div id="metaScreen" class="screen scrollscreen">
-    <h2>UPGRADES</h2>
-    <p class="gold-hdr">+ <span id="metaGold">0</span></p>
-    <div id="upgrades"></div>
-    <button data-act="home">BACK</button>
+<section class="final">
+  <h2>Three minutes. Or three hours.</h2>
+  <p>It's the same game. That's the point.</p>
+  <a class="cta big" href="play.html">PLAY NOW &rarr;</a>
+  <p class="note">No login. No ads. No install. Your progress saves in your browser.</p>
+</section>
+
+</main>
+
+<footer>
+  <div>Killer Horde &middot; a one-thumb survivors-like</div>
+  <div class="links">
+    <a href="play.html">Play</a>
+    <span>&middot;</span>
+    <a href="#features">Features</a>
+    <span>&middot;</span>
+    <a href="#how">How to play</a>
   </div>
+</footer>
 
-  <div id="charsScreen" class="screen scrollscreen">
-    <h2>HEROES</h2>
-    <div id="chars"></div>
-    <button data-act="home">BACK</button>
-  </div>
-
-  <div id="biomesScreen" class="screen scrollscreen">
-    <h2>BIOMES</h2>
-    <div id="biomes"></div>
-    <button data-act="home">BACK</button>
-  </div>
-
-  <div id="pause" class="screen">
-    <h2>PAUSED</h2>
-    <button data-act="resume">RESUME</button>
-    <button data-act="quit">QUIT RUN</button>
-  </div>
-</div>
-
-<script src="js/data.js"></script>
-<script src="js/engine.js"></script>
-<script src="js/entities.js"></script>
-<script src="js/game.js"></script>
+<script src="js/landing.js"></script>
 </body>
 </html>
