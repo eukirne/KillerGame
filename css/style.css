@@ -1,0 +1,46 @@
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+html,body{width:100%;height:100%;background:#05070d;overflow:hidden;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#e6ecff;overscroll-behavior:none}
+#game{position:fixed;inset:0;overflow:hidden;touch-action:none}
+#cv{position:absolute;inset:0;display:block;width:100%;height:100%;background:#05070d}
+#hud{position:absolute;inset:0;pointer-events:none;display:flex;flex-direction:column}
+#top{padding:14px 16px 0;display:flex;flex-direction:column;gap:6px}
+#hpbar{height:11px;border:1px solid #3a4566;border-radius:6px;overflow:hidden;background:#0a0f1e;box-shadow:0 0 12px rgba(255,60,90,.15)}
+#hpfill{height:100%;width:100%;background:linear-gradient(90deg,#ff3a5c,#ff8aa0);transition:width .12s linear}
+#xpbar{height:5px;border-radius:4px;overflow:hidden;background:#0a0f1e;border:1px solid #1c2746}
+#xpfill{height:100%;width:0;background:linear-gradient(90deg,#3ad1ff,#9feaff);transition:width .08s linear}
+#stats{display:flex;justify-content:space-between;font:700 13px/1 ui-monospace,Menlo,Consolas,monospace;color:#9fb4dc;letter-spacing:.5px;padding:2px 2px}
+#stats span{text-shadow:0 1px 2px #000}
+#joy{position:absolute;width:140px;height:140px;border-radius:50%;background:rgba(120,160,255,.06);border:2px solid rgba(120,160,255,.18);display:none;pointer-events:none}
+#stick{position:absolute;left:50%;top:50%;width:64px;height:64px;margin:-32px 0 0 -32px;border-radius:50%;background:rgba(120,160,255,.28);border:2px solid rgba(160,200,255,.6);box-shadow:0 0 18px rgba(120,160,255,.4)}
+.screen{position:absolute;inset:0;background:rgba(5,7,13,.93);display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:48px 24px 32px;pointer-events:auto;z-index:10}
+.screen.show{display:flex}
+.scrollscreen{justify-content:flex-start;overflow-y:auto;-webkit-overflow-scrolling:touch}
+h1{font:900 44px/1 system-ui;letter-spacing:5px;text-align:center;color:#fff;text-shadow:0 0 24px #3ad1ff;margin-bottom:4px}
+h1 span{display:block;color:#ff6680;text-shadow:0 0 24px #ff3a5c;margin-top:4px}
+h2{font:900 28px/1 system-ui;letter-spacing:3px;color:#fff;margin-bottom:8px;text-shadow:0 0 16px rgba(122,214,255,.3)}
+.sub{color:#9fb4dc;margin-bottom:16px;font-size:14px;letter-spacing:1px}
+.hint{position:absolute;bottom:24px;left:0;right:0;color:#6b7aa0;font-size:12px;text-align:center;padding:0 24px}
+button{background:linear-gradient(180deg,#2b3a6a,#1a2344);color:#fff;border:1px solid #4a5f9d;border-radius:10px;padding:14px 28px;font:800 14px system-ui;letter-spacing:2px;min-width:240px;cursor:pointer;box-shadow:0 4px 0 #0c1326,0 0 14px rgba(60,120,220,.25);transition:transform .04s}
+button:active{transform:translateY(2px);box-shadow:0 2px 0 #0c1326}
+#choices{display:flex;flex-direction:column;gap:10px;width:min(380px,92vw)}
+.choice{background:linear-gradient(180deg,#2a3560,#141b38);border:1px solid #4c5e95;border-radius:12px;padding:14px 16px;text-align:left;cursor:pointer;color:#fff;position:relative}
+.choice:active{transform:translateY(1px)}
+.choice .ctitle{font:900 16px system-ui;letter-spacing:1px;color:#7ad6ff}
+.choice .cdesc{font:500 12px system-ui;color:#b7c4e6;margin-top:4px;line-height:1.4}
+.choice .clvl{position:absolute;top:12px;right:14px;font:800 11px ui-monospace,monospace;color:#ffcf66;letter-spacing:1px}
+.choice.new{border-color:#ff9e66}
+.choice.new .ctitle{color:#ffb380}
+.choice.new .clvl{color:#ff9e66}
+#pauseBtn{position:absolute;top:14px;right:14px;width:38px;height:38px;min-width:0;padding:0;font-size:13px;letter-spacing:0;opacity:.75;pointer-events:auto}
+#upgrades,#chars,#biomes{display:flex;flex-direction:column;gap:8px;width:min(440px,94vw);margin-bottom:14px}
+.card{background:#141b38;border:1px solid #2e3a68;border-radius:10px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.card.owned{border-color:#3ad1ff;box-shadow:0 0 12px rgba(58,209,255,.15)}
+.card.locked{opacity:.55}
+.card .t{font:800 14px system-ui;color:#fff;letter-spacing:.5px}
+.card .d{font:500 11px system-ui;color:#90a2cc;margin-top:3px;line-height:1.3}
+.card .r{text-align:right;flex-shrink:0}
+.card button{min-width:0;padding:9px 14px;font-size:11px;letter-spacing:1px;box-shadow:0 3px 0 #0c1326}
+.gold-hdr{color:#ffcf66;font:800 20px ui-monospace,monospace;margin-bottom:6px}
+#summary{color:#b7c4e6;text-align:center;margin-bottom:10px;line-height:1.8;font:600 14px ui-monospace,monospace}
+#summary b{color:#7ad6ff}
+#rerollBtn{margin-top:6px;background:linear-gradient(180deg,#3a2b6a,#2a1a44);border-color:#7d4a9d}

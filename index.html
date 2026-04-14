@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+<meta name="theme-color" content="#05070d"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<title>Killer Horde</title>
+<link rel="stylesheet" href="css/style.css"/>
+</head>
+<body>
+<div id="game">
+  <canvas id="cv"></canvas>
+
+  <div id="hud">
+    <div id="top">
+      <div id="hpbar"><div id="hpfill"></div></div>
+      <div id="xpbar"><div id="xpfill"></div></div>
+      <div id="stats">
+        <span id="time">00:00</span>
+        <span id="lvl">Lv 1</span>
+        <span id="kills">x 0</span>
+        <span id="gold">+ 0</span>
+      </div>
+    </div>
+    <div id="joy"><div id="stick"></div></div>
+    <button id="pauseBtn" type="button">II</button>
+  </div>
+
+  <div id="menu" class="screen show">
+    <h1>KILLER<span>HORDE</span></h1>
+    <p class="sub">Survive the swarm. One thumb. Forever.</p>
+    <button data-act="play">PLAY</button>
+    <button data-act="meta">UPGRADES</button>
+    <button data-act="chars">HEROES</button>
+    <button data-act="biomes">BIOMES</button>
+    <div class="hint">Drag anywhere to move. You auto-attack. Hold to keep moving.</div>
+  </div>
+
+  <div id="levelup" class="screen">
+    <h2>LEVEL UP</h2>
+    <div id="choices"></div>
+    <button id="rerollBtn" data-act="reroll" style="display:none">REROLL (<span id="rerollN">0</span>)</button>
+  </div>
+
+  <div id="gameover" class="screen">
+    <h2>YOU DIED</h2>
+    <div id="summary"></div>
+    <button data-act="retry">PLAY AGAIN</button>
+    <button data-act="home">HOME</button>
+  </div>
+
+  <div id="metaScreen" class="screen scrollscreen">
+    <h2>UPGRADES</h2>
+    <p class="gold-hdr">+ <span id="metaGold">0</span></p>
+    <div id="upgrades"></div>
+    <button data-act="home">BACK</button>
+  </div>
+
+  <div id="charsScreen" class="screen scrollscreen">
+    <h2>HEROES</h2>
+    <div id="chars"></div>
+    <button data-act="home">BACK</button>
+  </div>
+
+  <div id="biomesScreen" class="screen scrollscreen">
+    <h2>BIOMES</h2>
+    <div id="biomes"></div>
+    <button data-act="home">BACK</button>
+  </div>
+
+  <div id="pause" class="screen">
+    <h2>PAUSED</h2>
+    <button data-act="resume">RESUME</button>
+    <button data-act="quit">QUIT RUN</button>
+  </div>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/entities.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
