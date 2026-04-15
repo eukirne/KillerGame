@@ -21,8 +21,12 @@ const S = {
   biome: BIOMES[0],
   biomeIdx: 0,
   hero: HEROES[0],
-  spawnTimer: 0.5,
-  bossTimer: 90,
+  room: 1,
+  roomState: 'fighting',  // 'fighting' | 'cleared'
+  roomSpawnLeft: 0,
+  roomSpawnTimer: 0,
+  roomKind: 'normal',     // 'normal' | 'boss'
+  roomClearT: 0,
   shake: 0,
   flash: 0,
   rerollsLeft: 0,
@@ -77,27 +81,61 @@ window.addEventListener('keydown', e => {
 });
 window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 
-// ---------- Input: single-touch target X ----------
-// Space-Invaders style: touch anywhere on the canvas and the ship
-// slides to that X position (capped at `baseSpd`). One thumb only.
+// ---------- Input: Archero-style floating joystick ----------
+// First touch plants a base circle where the finger lands; the stick
+// tracks the finger clamped to `radius`, with the base sliding along
+// with the finger once it crosses the edge (adaptive origin).
 const touch = {active:false, id:null, x:0, y:0};
+const joy = {
+  active:false,
+  baseX:0, baseY:0,      // screen-space center of the joystick
+  stickX:0, stickY:0,    // screen-space position of the stick dot
+  dx:0, dy:0,            // unit direction vector
+  mag:0,                 // 0..1 thrust magnitude
+  radius:62,             // max stick travel from base
+};
 
 function startTouch(id, x, y){
   if(S.mode !== 'playing' || S.paused) return;
   touch.active = true;
   touch.id = id;
-  touch.x = x;
-  touch.y = y;
+  touch.x = x; touch.y = y;
+  joy.active = true;
+  joy.baseX = x; joy.baseY = y;
+  joy.stickX = x; joy.stickY = y;
+  joy.dx = 0; joy.dy = 0; joy.mag = 0;
 }
 function moveTouch(id, x, y){
   if(!touch.active || touch.id !== id) return;
-  touch.x = x;
-  touch.y = y;
+  touch.x = x; touch.y = y;
+  let offX = x - joy.baseX;
+  let offY = y - joy.baseY;
+  const m = Math.hypot(offX, offY);
+  if(m < 0.001){
+    joy.stickX = joy.baseX; joy.stickY = joy.baseY;
+    joy.dx = 0; joy.dy = 0; joy.mag = 0;
+    return;
+  }
+  // Adaptive origin: once the finger crosses the radius, the base
+  // slides to follow it so the stick keeps tracking 1:1.
+  if(m > joy.radius){
+    joy.baseX = x - (offX / m) * joy.radius;
+    joy.baseY = y - (offY / m) * joy.radius;
+    offX = x - joy.baseX;
+    offY = y - joy.baseY;
+  }
+  joy.stickX = x; joy.stickY = y;
+  const m2 = Math.hypot(offX, offY) || 1;
+  joy.dx = offX / m2;
+  joy.dy = offY / m2;
+  joy.mag = Math.min(1, m2 / joy.radius);
 }
 function endTouch(id){
   if(touch.active && touch.id === id){
     touch.active = false;
     touch.id = null;
+    joy.active = false;
+    joy.mag = 0;
   }
 }
 
@@ -143,10 +181,6 @@ function getKeyVec(){
   return null;
 }
 
-// Returns the current touch target in screen pixels, or null if no touch.
-function getTargetScreen(){
-  return touch.active ? {x: touch.x, y: touch.y} : null;
-}
 
 // ---------- Meta persistence ----------
 const META_KEY = 'killerhorde.v1';

@@ -2,30 +2,66 @@
 // game.js — spawner, level-up, render, UI wiring, main loop, init
 // ============================================================
 
-// ---------- Spawner ----------
-function updateSpawner(dt){
-  S.spawnTimer -= dt;
-  const mins = S.t / 60;
-  const rate = Math.max(0.18, 1.0 - mins * 0.09);
-  const cap = 120;
-  if(S.spawnTimer <= 0 && S.enemies.length < cap){
-    S.spawnTimer = rate;
-    const count = 1 + Math.floor(mins * 0.5);
-    for(let i=0;i<count;i++){
-      if(S.enemies.length >= cap) break;
-      const t = pickWeighted(S.biome.pool, S.biome.weights);
-      spawnEnemy(t);
-    }
+// ---------- Rooms ----------
+// Archero-style room loop: each room drip-spawns a budget of enemies,
+// clearing them heals the player and advances to the next room. Every
+// 5th room is a boss encounter.
+function startRoom(){
+  const n = S.room;
+  S.roomState = 'fighting';
+  S.roomSpawnTimer = 0.25;
+  if(n % 5 === 0){
+    S.roomKind = 'boss';
+    S.roomSpawnLeft = 1;
+  } else {
+    S.roomKind = 'normal';
+    // Budget ramps with room number but plateaus so late rooms stay
+    // about damage density, not raw enemy count.
+    S.roomSpawnLeft = Math.min(42, 5 + Math.floor(n * 1.8));
   }
-  S.bossTimer -= dt;
-  if(S.bossTimer <= 0){
-    S.bossTimer = 90;
-    const b = spawnEnemy('boss');
-    const extra = Math.floor(mins / 1.5);
-    b.hp *= (1 + extra * 0.6);
-    b.hpMax = b.hp;
-    popup('BOSS', S.player.x, S.player.y - 60, '#ff4466');
-    S.shake = 10;
+}
+
+function updateSpawner(dt){
+  const p = S.player;
+  if(S.roomState === 'fighting'){
+    S.roomSpawnTimer -= dt;
+    if(S.roomSpawnTimer <= 0 && S.roomSpawnLeft > 0){
+      if(S.roomKind === 'boss'){
+        const b = spawnEnemy('boss');
+        const scale = 1 + Math.max(0, S.room / 5 - 1) * 0.55;
+        b.hp = Math.round(b.hp * scale);
+        b.hpMax = b.hp;
+        popup('BOSS', p.x, p.y - 60, '#ff4466');
+        S.shake = 12;
+        S.roomSpawnLeft = 0;
+      } else {
+        // Small batch per tick so waves feel like pressure, not a trickle.
+        const batch = Math.min(S.roomSpawnLeft, 1 + Math.floor(S.room / 4));
+        for(let i=0;i<batch;i++){
+          const t = pickWeighted(S.biome.pool, S.biome.weights);
+          spawnEnemy(t);
+        }
+        S.roomSpawnLeft -= batch;
+        S.roomSpawnTimer = Math.max(0.25, 0.9 - S.room * 0.03);
+      }
+    }
+    // Room cleared when no more to spawn and the field is empty.
+    if(S.roomSpawnLeft <= 0 && S.enemies.length === 0){
+      S.roomState = 'cleared';
+      S.roomClearT = 1.4;
+      const healAmt = 8 + Math.floor(S.room * 0.6);
+      p.hp = Math.min(p.maxHp, p.hp + healAmt);
+      popup('ROOM ' + S.room + ' CLEAR', p.x, p.y - 40, '#ffcf66');
+      // Bonus XP so upgrade cards pace with room clears.
+      gainXp(3 + S.room * 0.4);
+    }
+  } else if(S.roomState === 'cleared'){
+    S.roomClearT -= dt;
+    if(S.roomClearT <= 0){
+      S.room++;
+      if(S.room > (meta.maxRoom || 0)) meta.maxRoom = S.room;
+      startRoom();
+    }
   }
 }
 
@@ -144,14 +180,14 @@ function startRun(){
   S.xp = 0;
   S.xpNext = 5;
   S.lvl = 1;
-  S.spawnTimer = 0.5;
-  S.bossTimer = 90;
+  S.room = 1;
   S.shake = 0;
   S.flash = 0;
   S.rerollsLeft = metaBonus('rerolls') | 0;
   S.revivesLeft = metaBonus('revives') | 0;
   S.paused = false;
   S.newBiomeUnlocked = null;
+  startRoom();
   hideAll();
 }
 
@@ -164,8 +200,9 @@ function gameOver(){
   meta.totalGold += earned;
   if(S.t > meta.maxTime) meta.maxTime = S.t;
   if(S.lvl > meta.maxLevel) meta.maxLevel = S.lvl;
-  // Biome unlock: survive 5+ minutes to unlock the next one
-  if(S.t >= 300 && S.biomeIdx + 1 < BIOMES.length){
+  if(S.room > (meta.maxRoom || 0)) meta.maxRoom = S.room;
+  // Biome unlock: push past room 15 to crack open the next one.
+  if(S.room >= 15 && S.biomeIdx + 1 < BIOMES.length){
     const next = BIOMES[S.biomeIdx + 1];
     if(!meta.biomesUnlocked[next.id]){
       meta.biomesUnlocked[next.id] = true;
@@ -175,6 +212,7 @@ function gameOver(){
   checkHeroUnlocks();
   saveMeta();
   let summary =
+    `ROOM: <b>${S.room}</b><br>` +
     `TIME: <b>${fmtTime(S.t)}</b><br>` +
     `LEVEL: <b>${S.lvl}</b><br>` +
     `KILLS: <b>${S.kills}</b><br>` +
@@ -196,6 +234,7 @@ function checkHeroUnlocks(){
     else if(u.type === 'level')ok = meta.maxLevel >= u.v;
     else if(u.type === 'kills')ok = meta.totalKills >= u.v;
     else if(u.type === 'time') ok = meta.maxTime >= u.v;
+    else if(u.type === 'room') ok = (meta.maxRoom || 0) >= u.v;
     else if(u.type === 'biome')ok = unlockedBiomes > u.v;
     else if(u.type === 'gold') ok = meta.totalGold >= u.v;
     if(ok) meta.heroesUnlocked[h.id] = true;
@@ -214,7 +253,7 @@ function updateHud(){
   const p = S.player;
   hpFill.style.width = clamp(p.hp / p.maxHp * 100, 0, 100) + '%';
   xpFill.style.width = clamp(S.xp / S.xpNext * 100, 0, 100) + '%';
-  timeEl.textContent  = fmtTime(S.t);
+  timeEl.textContent  = 'R ' + S.room;
   killsEl.textContent = 'x ' + S.kills;
   goldEl.textContent  = '+ ' + S.runGold;
   lvlEl.textContent   = 'Lv ' + S.lvl;
@@ -372,6 +411,25 @@ function render(){
 
   ctx.restore();
 
+  // Floating joystick — drawn after restore so it lives in screen space.
+  if(joy.active){
+    ctx.fillStyle = 'rgba(10,15,30,0.38)';
+    ctx.strokeStyle = 'rgba(122,214,255,0.55)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(joy.baseX, joy.baseY, joy.radius, 0, Math.PI*2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(122,214,255,0.85)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(joy.stickX, joy.stickY, 26, 0, Math.PI*2);
+    ctx.fill();
+    ctx.stroke();
+  }
+
   if(S.flash > 0){
     ctx.globalAlpha = Math.min(1, S.flash * 2.5);
     ctx.fillStyle = '#ffffff';
@@ -396,7 +454,7 @@ function step(dt){
   const p = S.player;
   S.t += dt;
 
-  // --- Movement: 2D drag-to-move, stopping unleashes weapons. ---
+  // --- Movement: floating joystick drives 2D travel; stopping fires. ---
   const speed = p.baseSpd * p.spdMul;
   const maxStep = speed * dt;
   let moved = false;
@@ -405,22 +463,10 @@ function step(dt){
     p.x += kv.x * maxStep;
     p.y += kv.y * maxStep;
     moved = true;
-  } else {
-    const tp = getTargetScreen();
-    if(tp){
-      // Touch is in screen coords; convert to world using the camera.
-      const wx = tp.x - W/2 + S.cam.x;
-      const wy = tp.y - H/2 + S.cam.y;
-      const dx = wx - p.x, dy = wy - p.y;
-      const d = Math.hypot(dx, dy);
-      const stopDist = 4;
-      if(d > stopDist){
-        const stepLen = Math.min(d - stopDist, maxStep);
-        p.x += (dx/d) * stepLen;
-        p.y += (dy/d) * stepLen;
-        moved = stepLen > 0.5;
-      }
-    }
+  } else if(joy.active && joy.mag > 0.05){
+    p.x += joy.dx * joy.mag * maxStep;
+    p.y += joy.dy * joy.mag * maxStep;
+    moved = joy.mag > 0.08;
   }
   p.moving = moved;
 
@@ -523,6 +569,7 @@ function renderChars(){
       if(u.type === 'level') req = `Reach Lv ${u.v}`;
       else if(u.type === 'kills') req = `${meta.totalKills}/${u.v} kills`;
       else if(u.type === 'time')  req = `Survive ${(u.v/60)|0}:00`;
+      else if(u.type === 'room')  req = `Reach room ${u.v} (${meta.maxRoom||0})`;
       else if(u.type === 'biome') req = `Unlock ${u.v+1} biomes (${unlockedBiomes})`;
       else if(u.type === 'gold')  req = `Earn ${u.v} total gold`;
     } else {
@@ -559,7 +606,7 @@ function renderBiomes(){
     el.innerHTML =
       `<div>
          <div class="t">${b.name}</div>
-         <div class="d">${unlocked ? 'Tap to select' : `Survive 5:00 in ${prev ? prev.name : 'prev biome'}`}</div>
+         <div class="d">${unlocked ? 'Tap to select' : `Clear room 15 in ${prev ? prev.name : 'prev biome'}`}</div>
        </div>
        <div class="r"><span style="color:${selected?'#7ad6ff':'#90a2cc'};font-size:11px">${selected?'SELECTED':''}</span></div>`;
     if(unlocked){
