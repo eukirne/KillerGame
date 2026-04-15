@@ -15,7 +15,8 @@ function makePlayer(){
     invuln:0,
     weapons:{},
     passives:{},
-    last:{x:1, y:0},
+    last:{x:1, y:0},  // last movement direction
+    aim: {x:1, y:0},  // current aim direction (right stick or fallback)
   };
 }
 
@@ -149,7 +150,11 @@ function fireWeapon(id, lvl){
   const p = S.player;
 
   if(id === 'shard'){
-    const dir = (p.last.x || p.last.y) ? p.last : {x:1, y:0};
+    // Aim first, movement direction as fallback, then east.
+    const dir =
+      (p.aim.x || p.aim.y)   ? p.aim :
+      (p.last.x || p.last.y) ? p.last :
+                               {x:1, y:0};
     const base = Math.atan2(dir.y, dir.x);
     const spread = Math.min(0.8, 0.18 * (lvl.n - 1));
     for(let i=0;i<lvl.n;i++){
@@ -166,11 +171,18 @@ function fireWeapon(id, lvl){
   }
 
   if(id === 'seeker'){
+    const dir =
+      (p.aim.x || p.aim.y)   ? p.aim :
+      (p.last.x || p.last.y) ? p.last :
+                               {x:1, y:0};
+    const base = Math.atan2(dir.y, dir.x);
+    const spread = 0.5;
     for(let i=0;i<lvl.n;i++){
-      const a = Math.random() * Math.PI * 2;
+      const off = lvl.n === 1 ? 0 : (i/(lvl.n-1) - 0.5) * spread * 2;
+      const a = base + off;
       S.projectiles.push({
         type:'seeker', x:p.x, y:p.y,
-        vx:Math.cos(a)*60, vy:Math.sin(a)*60,
+        vx:Math.cos(a)*lvl.spd*0.5, vy:Math.sin(a)*lvl.spd*0.5,
         dmg:lvl.dmg * p.dmgMul,
         life:lvl.life, sz:lvl.sz, col:'#ff9e66',
         spd:lvl.spd, target:null

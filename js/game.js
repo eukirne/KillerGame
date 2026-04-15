@@ -341,9 +341,9 @@ function render(){
   ctx.beginPath();
   ctx.arc(pl.x, pl.y, pl.r, 0, Math.PI*2);
   ctx.fill();
-  ctx.fillStyle = '#3ad1ff';
+  ctx.fillStyle = '#ff9e66';
   ctx.beginPath();
-  ctx.arc(pl.x + pl.last.x*3, pl.y + pl.last.y*3, pl.r*0.55, 0, Math.PI*2);
+  ctx.arc(pl.x + pl.aim.x*8, pl.y + pl.aim.y*8, pl.r*0.5, 0, Math.PI*2);
   ctx.fill();
   ctx.globalAlpha = 1;
 
@@ -393,10 +393,21 @@ function step(dt){
   const p = S.player;
   S.t += dt;
 
-  const inp = getInputVec();
-  p.x += inp.x * p.baseSpd * p.spdMul * dt;
-  p.y += inp.y * p.baseSpd * p.spdMul * dt;
-  if(inp.x || inp.y){ p.last.x = inp.x; p.last.y = inp.y; }
+  const mv = getMoveVec();
+  p.x += mv.x * p.baseSpd * p.spdMul * dt;
+  p.y += mv.y * p.baseSpd * p.spdMul * dt;
+  if(mv.x || mv.y){ p.last.x = mv.x; p.last.y = mv.y; }
+
+  // Aim: right-thumb stick if active, otherwise fall back to the
+  // direction the player is travelling.
+  const av = getAimVec();
+  if(av){
+    p.aim.x = av.x; p.aim.y = av.y;
+  } else {
+    p.aim.x = p.last.x; p.aim.y = p.last.y;
+  }
+
+  updateJoyUI();
 
   p.invuln -= dt;
   if(p.regen > 0) p.hp = Math.min(p.maxHp, p.hp + p.regen * dt);
