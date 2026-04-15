@@ -77,143 +77,71 @@ window.addEventListener('keydown', e => {
 });
 window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 
-// ---------- Input: twin virtual joysticks ----------
-// Left half of screen = movement thumb. Right half = aim thumb.
-// Each stick has an adaptive origin that re-centers as the finger
-// drifts past `MAX_R`, so changing direction updates the vector
-// immediately — no stale "dead zone" between old and new heading.
-const MAX_R = 55;                 // stick radius used for both UX and origin drag
-const DEAD_Z = 8;                 // ignore micro-jitter
-
-const touches = {
-  move: {active:false, id:null, ox:0, oy:0, x:0, y:0},
-  aim:  {active:false, id:null, ox:0, oy:0, x:0, y:0},
-};
-const joyMoveEl  = document.getElementById('joyMove');
-const joyAimEl   = document.getElementById('joyAim');
-const stickMoveEl= joyMoveEl.querySelector('.stick');
-const stickAimEl = joyAimEl.querySelector('.stick');
-
-function sideFor(x){ return x < W/2 ? 'move' : 'aim'; }
+// ---------- Input: single-touch target X ----------
+// Space-Invaders style: touch anywhere on the canvas and the ship
+// slides to that X position (capped at `baseSpd`). One thumb only.
+const touch = {active:false, id:null, x:0, y:0};
 
 function startTouch(id, x, y){
   if(S.mode !== 'playing' || S.paused) return;
-  const side = sideFor(x);
-  const t = touches[side];
-  if(t.active) return;            // that side is already in use; ignore
-  t.active = true;
-  t.id = id;
-  t.ox = x; t.oy = y;
-  t.x = x;  t.y = y;
+  touch.active = true;
+  touch.id = id;
+  touch.x = x;
+  touch.y = y;
 }
-
 function moveTouch(id, x, y){
-  for(const key of ['move','aim']){
-    const t = touches[key];
-    if(!t.active || t.id !== id) continue;
-    // Drag origin behind the finger so the vector always reflects the
-    // most recent direction the finger is heading.
-    const dx = x - t.ox, dy = y - t.oy;
-    const d = Math.hypot(dx, dy);
-    if(d > MAX_R){
-      const pull = d - MAX_R;
-      t.ox += (dx / d) * pull;
-      t.oy += (dy / d) * pull;
-    }
-    t.x = x; t.y = y;
-    return;
-  }
+  if(!touch.active || touch.id !== id) return;
+  touch.x = x;
+  touch.y = y;
 }
-
 function endTouch(id){
-  for(const key of ['move','aim']){
-    const t = touches[key];
-    if(t.active && t.id === id){
-      t.active = false;
-      t.id = null;
-      return;
-    }
+  if(touch.active && touch.id === id){
+    touch.active = false;
+    touch.id = null;
   }
 }
 
 cv.addEventListener('touchstart', e => {
   e.preventDefault();
-  for(const t of e.changedTouches) startTouch(t.identifier, t.clientX, t.clientY);
+  const t = e.changedTouches[0];
+  if(!t) return;
+  startTouch(t.identifier, t.clientX, t.clientY);
 }, {passive:false});
 cv.addEventListener('touchmove', e => {
   e.preventDefault();
-  for(const t of e.changedTouches) moveTouch(t.identifier, t.clientX, t.clientY);
+  for(const t of e.changedTouches){
+    if(t.identifier === touch.id){ moveTouch(t.identifier, t.clientX, t.clientY); break; }
+  }
 }, {passive:false});
 cv.addEventListener('touchend', e => {
   e.preventDefault();
-  for(const t of e.changedTouches) endTouch(t.identifier);
+  for(const t of e.changedTouches){
+    if(t.identifier === touch.id){ endTouch(t.identifier); break; }
+  }
 }, {passive:false});
 cv.addEventListener('touchcancel', e => {
   for(const t of e.changedTouches) endTouch(t.identifier);
 }, {passive:false});
 
-// Mouse fallback: the mouse acts as a single touch; its side (left or
-// right) is decided by the click position, same as finger input.
-let mouseId = 'mouse';
-let mdown = false;
-cv.addEventListener('mousedown', e => { mdown = true; startTouch(mouseId, e.clientX, e.clientY); });
-cv.addEventListener('mousemove', e => { if(mdown) moveTouch(mouseId, e.clientX, e.clientY); });
-cv.addEventListener('mouseup',   () => { mdown = false; endTouch(mouseId); });
-cv.addEventListener('mouseleave',() => { mdown = false; endTouch(mouseId); });
+// Mouse fallback for desktop testing — behaves like a single touch.
+cv.addEventListener('mousedown', e => { startTouch('mouse', e.clientX, e.clientY); });
+cv.addEventListener('mousemove', e => { if(touch.active) moveTouch('mouse', e.clientX, e.clientY); });
+cv.addEventListener('mouseup',   () => endTouch('mouse'));
+cv.addEventListener('mouseleave',() => endTouch('mouse'));
 
-function stickVec(t){
-  if(!t.active) return null;
-  const dx = t.x - t.ox, dy = t.y - t.oy;
-  const d = Math.hypot(dx, dy);
-  if(d < DEAD_Z) return null;
-  return {x: dx/d, y: dy/d};
+// Returns the horizontal key press direction, if any (-1, 0 or +1).
+function getKeyDX(){
+  let dx = 0;
+  if(keys['a'] || keys['arrowleft'])  dx -= 1;
+  if(keys['d'] || keys['arrowright']) dx += 1;
+  return dx;
 }
 
-function getMoveVec(){
-  // Keyboard takes priority on desktop
-  let kx = 0, ky = 0;
-  if(keys['w'] || keys['arrowup'])    ky -= 1;
-  if(keys['s'] || keys['arrowdown'])  ky += 1;
-  if(keys['a'] || keys['arrowleft'])  kx -= 1;
-  if(keys['d'] || keys['arrowright']) kx += 1;
-  if(kx || ky){
-    const m = Math.hypot(kx, ky);
-    return {x: kx/m, y: ky/m};
-  }
-  return stickVec(touches.move) || {x:0, y:0};
-}
-
-// Returns null if the aim stick is idle — weapons then fall back to
-// movement direction (or auto-aim for homing weapons).
-function getAimVec(){
-  return stickVec(touches.aim);
-}
-
-// Sync the on-screen joystick visuals to the current touch state.
-// Called each frame from the main loop.
-function updateJoyUI(){
-  const pairs = [
-    {t:touches.move, joy:joyMoveEl, stick:stickMoveEl},
-    {t:touches.aim,  joy:joyAimEl,  stick:stickAimEl},
-  ];
-  for(const {t, joy, stick} of pairs){
-    if(t.active){
-      joy.style.left = (t.ox - 70) + 'px';
-      joy.style.top  = (t.oy - 70) + 'px';
-      joy.style.display = 'block';
-      const dx = t.x - t.ox, dy = t.y - t.oy;
-      const d = Math.hypot(dx, dy);
-      if(d > 0.01){
-        const m = Math.min(d, MAX_R);
-        const a = Math.atan2(dy, dx);
-        stick.style.transform = `translate(${Math.cos(a)*m}px,${Math.sin(a)*m}px)`;
-      } else {
-        stick.style.transform = 'translate(0px,0px)';
-      }
-    } else {
-      joy.style.display = 'none';
-    }
-  }
+// Returns the current target X in screen pixels, or null if the player
+// should stand still.
+function getTargetX(){
+  if(touch.active) return touch.x;
+  return null;
 }
 
 // ---------- Meta persistence ----------

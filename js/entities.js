@@ -7,16 +7,14 @@ let ENEMY_ID = 1;
 // ---------- Player ----------
 function makePlayer(){
   return {
-    x:0, y:0, r:12,
+    x:0, y:0, r:16,
     hp:100, maxHp:100,
-    baseSpd:180,
+    baseSpd:520,             // horizontal slide speed (px/s)
     dmgMul:1, spdMul:1, cdMul:1, magMul:1, lootMul:1,
     armor:0, regen:0,
     invuln:0,
     weapons:{},
     passives:{},
-    last:{x:1, y:0},  // last movement direction
-    aim: {x:1, y:0},  // current aim direction (right stick or fallback)
   };
 }
 
@@ -150,39 +148,32 @@ function fireWeapon(id, lvl){
   const p = S.player;
 
   if(id === 'shard'){
-    // Aim first, movement direction as fallback, then east.
-    const dir =
-      (p.aim.x || p.aim.y)   ? p.aim :
-      (p.last.x || p.last.y) ? p.last :
-                               {x:1, y:0};
-    const base = Math.atan2(dir.y, dir.x);
-    const spread = Math.min(0.8, 0.18 * (lvl.n - 1));
+    // Straight up with a horizontal spread as levels grow.
+    const base = -Math.PI / 2;
+    const spread = Math.min(0.9, 0.16 * (lvl.n - 1));
     for(let i=0;i<lvl.n;i++){
       const off = lvl.n === 1 ? 0 : (i/(lvl.n-1) - 0.5) * spread * 2;
       const a = base + off;
       S.projectiles.push({
-        type:'shard', x:p.x, y:p.y,
+        type:'shard', x:p.x, y:p.y - p.r,
         vx:Math.cos(a)*lvl.spd, vy:Math.sin(a)*lvl.spd,
         dmg:lvl.dmg * p.dmgMul, pr:lvl.pr,
-        life:1.3, sz:lvl.sz, col:'#7ad6ff', hits:{}
+        life:1.6, sz:lvl.sz, col:'#7ad6ff', hits:{}
       });
     }
     return;
   }
 
   if(id === 'seeker'){
-    const dir =
-      (p.aim.x || p.aim.y)   ? p.aim :
-      (p.last.x || p.last.y) ? p.last :
-                               {x:1, y:0};
-    const base = Math.atan2(dir.y, dir.x);
-    const spread = 0.5;
+    // Launch upward with fan spread, then home onto targets.
+    const base = -Math.PI / 2;
+    const spread = 0.7;
     for(let i=0;i<lvl.n;i++){
       const off = lvl.n === 1 ? 0 : (i/(lvl.n-1) - 0.5) * spread * 2;
       const a = base + off;
       S.projectiles.push({
-        type:'seeker', x:p.x, y:p.y,
-        vx:Math.cos(a)*lvl.spd*0.5, vy:Math.sin(a)*lvl.spd*0.5,
+        type:'seeker', x:p.x, y:p.y - p.r,
+        vx:Math.cos(a)*lvl.spd*0.55, vy:Math.sin(a)*lvl.spd*0.55,
         dmg:lvl.dmg * p.dmgMul,
         life:lvl.life, sz:lvl.sz, col:'#ff9e66',
         spd:lvl.spd, target:null
@@ -317,19 +308,18 @@ function updateProjectiles(dt){
 }
 
 // ---------- Enemies ----------
-function spawnEnemy(type){
-  const p = S.player;
-  const a = Math.random() * Math.PI * 2;
-  const r = Math.max(W, H) * 0.65 + 60;
+function spawnEnemy(type, xOverride){
   const base = ENEMIES[type];
   const mins = S.t / 60;
   const hpScale = 1 + mins * 0.38;
   const dmgScale = 1 + mins * 0.14;
+  const margin = base.r + 20;
+  const x = xOverride != null ? xOverride : rand(margin, Math.max(margin + 1, W - margin));
   const e = {
     id: ENEMY_ID++,
     type,
-    x: p.x + Math.cos(a) * r,
-    y: p.y + Math.sin(a) * r,
+    x,
+    y: -base.r - 10,
     r: base.r,
     hp: Math.round(base.hp * hpScale),
     hpMax: 0,
@@ -341,9 +331,11 @@ function spawnEnemy(type){
     ranged: !!base.ranged,
     explode: !!base.explode,
     boss: !!base.boss,
+    drift: (Math.random() - 0.5) * 2,   // -1..1 horizontal drift
+    driftT: rand(0.6, 1.6),
     kx: 0, ky: 0,
     hitFlash: 0,
-    shootT: base.ranged ? 1.2 + Math.random()*1.4 : 0,
+    shootT: base.ranged ? 1.0 + Math.random()*1.2 : 0,
   };
   e.hpMax = e.hp;
   S.enemies.push(e);
@@ -352,38 +344,65 @@ function spawnEnemy(type){
 
 function updateEnemies(dt){
   const p = S.player;
-  const maxD = Math.max(W, H) * 1.6;
   for(let i=S.enemies.length-1;i>=0;i--){
     const e = S.enemies[i];
     e.hitFlash = Math.max(0, e.hitFlash - dt * 4);
 
-    let dx = p.x - e.x, dy = p.y - e.y;
-    const d = Math.hypot(dx, dy) + 1e-3;
-
-    // Despawn if absurdly far
-    if(d > maxD){
-      S.enemies.splice(i, 1);
-      continue;
+    // Downward drift with some zigzag for variety.
+    e.driftT -= dt;
+    if(e.driftT <= 0){
+      e.driftT = rand(0.6, 1.6);
+      e.drift = (Math.random() - 0.5) * 2;
     }
-
-    dx /= d; dy /= d;
-    e.x += dx * e.spd * dt + e.kx * dt;
-    e.y += dy * e.spd * dt + e.ky * dt;
+    const vy = e.spd;
+    const vx = e.drift * e.spd * 0.35;
+    e.x += vx * dt + e.kx * dt;
+    e.y += vy * dt + e.ky * dt;
     e.kx *= 0.85; e.ky *= 0.85;
+
+    // Clamp horizontally and bounce drift off the walls.
+    if(e.x < e.r + 4){ e.x = e.r + 4; e.drift = Math.abs(e.drift); }
+    else if(e.x > W - e.r - 4){ e.x = W - e.r - 4; e.drift = -Math.abs(e.drift); }
+
+    // Escaped past the bottom — grazes the player and despawns.
+    if(e.y > H + e.r + 40){
+      if(!e.boss && p.invuln <= 0){
+        const dmgTaken = Math.max(1, Math.round(e.dmg * 0.5 - p.armor));
+        if(dmgTaken > 0){
+          p.hp -= dmgTaken;
+          p.invuln = 0.4;
+          popup('-' + dmgTaken, p.x, p.y - 22, '#ff6680');
+          S.flash = 0.15;
+        }
+      }
+      if(e.boss){
+        // Bosses don't leave — wrap back up.
+        e.y = -e.r - 20;
+        e.x = clamp(e.x, e.r + 20, W - e.r - 20);
+      } else {
+        S.enemies.splice(i, 1);
+        continue;
+      }
+    }
 
     if(e.ranged){
       e.shootT -= dt;
-      if(e.shootT <= 0 && d < 460){
-        e.shootT = 2.3;
+      if(e.shootT <= 0 && e.y > -10 && e.y < H){
+        e.shootT = rand(1.8, 2.8);
+        // Aim at the player, biased toward straight down.
+        const dx = p.x - e.x, dy = p.y - e.y;
+        const d = Math.hypot(dx, dy) + 1e-3;
         S.projectiles.push({
-          type:'enemy', x:e.x, y:e.y,
-          vx:dx*190, vy:dy*190,
-          dmg:e.dmg, life:3, sz:6, col:'#66ffcc'
+          type:'enemy', x:e.x, y:e.y + e.r,
+          vx:(dx/d) * 220, vy:(dy/d) * 220,
+          dmg:e.dmg, life:4, sz:6, col:'#66ffcc'
         });
       }
     }
 
-    if(d < e.r + p.r){
+    // Contact with player.
+    const ddx = p.x - e.x, ddy = p.y - e.y;
+    if(ddx*ddx + ddy*ddy < (e.r + p.r) * (e.r + p.r)){
       if(p.invuln <= 0){
         const dmgTaken = Math.max(1, Math.round(e.dmg - p.armor));
         p.hp -= dmgTaken;
@@ -418,23 +437,32 @@ function updateEnemies(dt){
 // ---------- Pickups ----------
 function updatePickups(dt){
   const p = S.player;
-  const mag = 72 * p.magMul;
+  const mag = 110 * p.magMul;
   for(let i=S.pickups.length-1;i>=0;i--){
     const k = S.pickups[i];
-    k.x += k.vx*dt; k.y += k.vy*dt;
-    k.vx *= 0.9; k.vy *= 0.9;
+    // Gentle gravity so pickups drift toward the player's lane.
+    k.vy += 180 * dt;
+    k.vx *= 0.985;
+    k.x += k.vx * dt;
+    k.y += k.vy * dt;
+
     const dx = p.x - k.x, dy = p.y - k.y;
     const d = Math.hypot(dx, dy) + 1e-3;
     if(d < mag){
-      const f = 460;
+      const f = 820;
       k.vx += (dx/d) * f * dt;
       k.vy += (dy/d) * f * dt;
     }
-    if(d < p.r + 7){
+    if(d < p.r + 9){
       if(k.type === 'xp'){
         const amt = k.val * (1 + metaBonus('xpMul')) * p.lootMul;
         gainXp(amt);
       }
+      S.pickups.splice(i, 1);
+      continue;
+    }
+    // Off the bottom of the screen — gone.
+    if(k.y > H + 40){
       S.pickups.splice(i, 1);
     }
   }

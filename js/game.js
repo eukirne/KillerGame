@@ -6,11 +6,11 @@
 function updateSpawner(dt){
   S.spawnTimer -= dt;
   const mins = S.t / 60;
-  const rate = Math.max(0.12, 0.85 - mins * 0.07);
-  const cap = 260;
+  const rate = Math.max(0.35, 1.4 - mins * 0.12);
+  const cap = 70;
   if(S.spawnTimer <= 0 && S.enemies.length < cap){
     S.spawnTimer = rate;
-    const count = 1 + Math.floor(mins * 0.6);
+    const count = 1 + Math.floor(mins * 0.45);
     for(let i=0;i<count;i++){
       if(S.enemies.length >= cap) break;
       const t = pickWeighted(S.biome.pool, S.biome.weights);
@@ -20,11 +20,12 @@ function updateSpawner(dt){
   S.bossTimer -= dt;
   if(S.bossTimer <= 0){
     S.bossTimer = 90;
-    const b = spawnEnemy('boss');
+    const b = spawnEnemy('boss', W / 2);
     const extra = Math.floor(mins / 1.5);
     b.hp *= (1 + extra * 0.6);
     b.hpMax = b.hp;
-    popup('BOSS', S.player.x, S.player.y - 60, '#ff4466');
+    b.spd = Math.min(b.spd, 60);
+    popup('BOSS', W / 2, 60, '#ff4466');
     S.shake = 10;
   }
 }
@@ -129,8 +130,8 @@ function startRun(){
   S.mode = 'playing';
   S.player = makePlayer();
   applyMetaAndHero(S.player);
-  S.player.x = 0;
-  S.player.y = 0;
+  S.player.x = W / 2;
+  S.player.y = H - 70;
   giveWeapon(S.hero.start);
   S.enemies = [];
   S.projectiles = [];
@@ -232,21 +233,20 @@ function render(){
   const shy = (Math.random() - 0.5) * S.shake;
 
   ctx.save();
-  ctx.translate(W/2 - S.cam.x + shx, H/2 - S.cam.y + shy);
+  ctx.translate(shx, shy);
 
-  // Grid
+  // Scrolling grid — the world moves past the ship.
   ctx.strokeStyle = S.biome.grid;
   ctx.lineWidth = 1;
   const gs = 64;
-  const left   = S.cam.x - W/2 - gs;
-  const right  = S.cam.x + W/2 + gs;
-  const top    = S.cam.y - H/2 - gs;
-  const bottom = S.cam.y + H/2 + gs;
-  const x0 = Math.floor(left / gs) * gs;
-  const y0 = Math.floor(top / gs) * gs;
+  const off = (S.t * 80) % gs;
   ctx.beginPath();
-  for(let x=x0;x<right;x+=gs){ ctx.moveTo(x, top); ctx.lineTo(x, bottom); }
-  for(let y=y0;y<bottom;y+=gs){ ctx.moveTo(left, y); ctx.lineTo(right, y); }
+  for(let x = -gs; x < W + gs; x += gs){
+    ctx.moveTo(x, -gs); ctx.lineTo(x, H + gs);
+  }
+  for(let y = -gs + off; y < H + gs; y += gs){
+    ctx.moveTo(-gs, y); ctx.lineTo(W + gs, y);
+  }
   ctx.stroke();
 
   // Pickups
@@ -332,18 +332,31 @@ function render(){
     ctx.globalAlpha = 1;
   }
 
-  // Player
+  // Player — upward-pointing ship.
   const pl = S.player;
   if(pl.invuln > 0 && ((S.t * 18) | 0) % 2 === 0){
     ctx.globalAlpha = 0.45;
   }
   ctx.fillStyle = '#ffffff';
   ctx.beginPath();
-  ctx.arc(pl.x, pl.y, pl.r, 0, Math.PI*2);
+  ctx.moveTo(pl.x, pl.y - pl.r);
+  ctx.lineTo(pl.x + pl.r * 0.95, pl.y + pl.r * 0.75);
+  ctx.lineTo(pl.x, pl.y + pl.r * 0.35);
+  ctx.lineTo(pl.x - pl.r * 0.95, pl.y + pl.r * 0.75);
+  ctx.closePath();
   ctx.fill();
   ctx.fillStyle = '#ff9e66';
   ctx.beginPath();
-  ctx.arc(pl.x + pl.aim.x*8, pl.y + pl.aim.y*8, pl.r*0.5, 0, Math.PI*2);
+  ctx.arc(pl.x, pl.y - pl.r * 0.15, pl.r * 0.35, 0, Math.PI*2);
+  ctx.fill();
+  // Thruster flame
+  ctx.fillStyle = '#3ad1ff';
+  const flick = 0.6 + Math.random() * 0.5;
+  ctx.beginPath();
+  ctx.moveTo(pl.x - pl.r * 0.4, pl.y + pl.r * 0.7);
+  ctx.lineTo(pl.x, pl.y + pl.r * 0.7 + pl.r * flick);
+  ctx.lineTo(pl.x + pl.r * 0.4, pl.y + pl.r * 0.7);
+  ctx.closePath();
   ctx.fill();
   ctx.globalAlpha = 1;
 
@@ -393,28 +406,28 @@ function step(dt){
   const p = S.player;
   S.t += dt;
 
-  const mv = getMoveVec();
-  p.x += mv.x * p.baseSpd * p.spdMul * dt;
-  p.y += mv.y * p.baseSpd * p.spdMul * dt;
-  if(mv.x || mv.y){ p.last.x = mv.x; p.last.y = mv.y; }
-
-  // Aim: right-thumb stick if active, otherwise fall back to the
-  // direction the player is travelling.
-  const av = getAimVec();
-  if(av){
-    p.aim.x = av.x; p.aim.y = av.y;
+  // Player is locked near the bottom — X only.
+  p.y = H - 70;
+  const maxStep = p.baseSpd * p.spdMul * dt;
+  const kdx = getKeyDX();
+  if(kdx !== 0){
+    p.x += kdx * maxStep;
   } else {
-    p.aim.x = p.last.x; p.aim.y = p.last.y;
+    const tx = getTargetX();
+    if(tx !== null){
+      const diff = tx - p.x;
+      if(Math.abs(diff) <= maxStep) p.x = tx;
+      else p.x += Math.sign(diff) * maxStep;
+    }
   }
-
-  updateJoyUI();
+  p.x = clamp(p.x, p.r + 8, W - p.r - 8);
 
   p.invuln -= dt;
   if(p.regen > 0) p.hp = Math.min(p.maxHp, p.hp + p.regen * dt);
 
-  // Camera follow
-  S.cam.x += (p.x - S.cam.x) * Math.min(1, dt * 9);
-  S.cam.y += (p.y - S.cam.y) * Math.min(1, dt * 9);
+  // No camera — the world is the screen.
+  S.cam.x = 0;
+  S.cam.y = 0;
 
   updateSpawner(dt);
   updateEnemies(dt);
