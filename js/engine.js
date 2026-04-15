@@ -129,19 +129,23 @@ cv.addEventListener('mousemove', e => { if(touch.active) moveTouch('mouse', e.cl
 cv.addEventListener('mouseup',   () => endTouch('mouse'));
 cv.addEventListener('mouseleave',() => endTouch('mouse'));
 
-// Returns the horizontal key press direction, if any (-1, 0 or +1).
-function getKeyDX(){
-  let dx = 0;
+// Returns the unit-length keyboard move vector, or null if no keys pressed.
+function getKeyVec(){
+  let dx = 0, dy = 0;
   if(keys['a'] || keys['arrowleft'])  dx -= 1;
   if(keys['d'] || keys['arrowright']) dx += 1;
-  return dx;
+  if(keys['w'] || keys['arrowup'])    dy -= 1;
+  if(keys['s'] || keys['arrowdown'])  dy += 1;
+  if(dx || dy){
+    const m = Math.hypot(dx, dy);
+    return {x: dx/m, y: dy/m};
+  }
+  return null;
 }
 
-// Returns the current target X in screen pixels, or null if the player
-// should stand still.
-function getTargetX(){
-  if(touch.active) return touch.x;
-  return null;
+// Returns the current touch target in screen pixels, or null if no touch.
+function getTargetScreen(){
+  return touch.active ? {x: touch.x, y: touch.y} : null;
 }
 
 // ---------- Meta persistence ----------

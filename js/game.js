@@ -6,11 +6,11 @@
 function updateSpawner(dt){
   S.spawnTimer -= dt;
   const mins = S.t / 60;
-  const rate = Math.max(0.35, 1.4 - mins * 0.12);
-  const cap = 70;
+  const rate = Math.max(0.18, 1.0 - mins * 0.09);
+  const cap = 120;
   if(S.spawnTimer <= 0 && S.enemies.length < cap){
     S.spawnTimer = rate;
-    const count = 1 + Math.floor(mins * 0.45);
+    const count = 1 + Math.floor(mins * 0.5);
     for(let i=0;i<count;i++){
       if(S.enemies.length >= cap) break;
       const t = pickWeighted(S.biome.pool, S.biome.weights);
@@ -20,12 +20,11 @@ function updateSpawner(dt){
   S.bossTimer -= dt;
   if(S.bossTimer <= 0){
     S.bossTimer = 90;
-    const b = spawnEnemy('boss', W / 2);
+    const b = spawnEnemy('boss');
     const extra = Math.floor(mins / 1.5);
     b.hp *= (1 + extra * 0.6);
     b.hpMax = b.hp;
-    b.spd = Math.min(b.spd, 60);
-    popup('BOSS', W / 2, 60, '#ff4466');
+    popup('BOSS', S.player.x, S.player.y - 60, '#ff4466');
     S.shake = 10;
   }
 }
@@ -130,8 +129,8 @@ function startRun(){
   S.mode = 'playing';
   S.player = makePlayer();
   applyMetaAndHero(S.player);
-  S.player.x = W / 2;
-  S.player.y = H - 70;
+  S.player.x = 0;
+  S.player.y = 0;
   giveWeapon(S.hero.start);
   S.enemies = [];
   S.projectiles = [];
@@ -233,20 +232,21 @@ function render(){
   const shy = (Math.random() - 0.5) * S.shake;
 
   ctx.save();
-  ctx.translate(shx, shy);
+  ctx.translate(W/2 - S.cam.x + shx, H/2 - S.cam.y + shy);
 
-  // Scrolling grid — the world moves past the ship.
+  // Grid in world space.
   ctx.strokeStyle = S.biome.grid;
   ctx.lineWidth = 1;
   const gs = 64;
-  const off = (S.t * 80) % gs;
+  const left   = S.cam.x - W/2 - gs;
+  const right  = S.cam.x + W/2 + gs;
+  const top    = S.cam.y - H/2 - gs;
+  const bottom = S.cam.y + H/2 + gs;
+  const x0 = Math.floor(left / gs) * gs;
+  const y0 = Math.floor(top / gs) * gs;
   ctx.beginPath();
-  for(let x = -gs; x < W + gs; x += gs){
-    ctx.moveTo(x, -gs); ctx.lineTo(x, H + gs);
-  }
-  for(let y = -gs + off; y < H + gs; y += gs){
-    ctx.moveTo(-gs, y); ctx.lineTo(W + gs, y);
-  }
+  for(let x=x0;x<right;x+=gs){ ctx.moveTo(x, top); ctx.lineTo(x, bottom); }
+  for(let y=y0;y<bottom;y+=gs){ ctx.moveTo(left, y); ctx.lineTo(right, y); }
   ctx.stroke();
 
   // Pickups
@@ -332,31 +332,21 @@ function render(){
     ctx.globalAlpha = 1;
   }
 
-  // Player — upward-pointing ship.
+  // Player — circle with an aim indicator that lights up when stopped
+  // (i.e. firing). While moving it dims, reminding you that you're only
+  // dodging, not damaging.
   const pl = S.player;
   if(pl.invuln > 0 && ((S.t * 18) | 0) % 2 === 0){
     ctx.globalAlpha = 0.45;
   }
   ctx.fillStyle = '#ffffff';
   ctx.beginPath();
-  ctx.moveTo(pl.x, pl.y - pl.r);
-  ctx.lineTo(pl.x + pl.r * 0.95, pl.y + pl.r * 0.75);
-  ctx.lineTo(pl.x, pl.y + pl.r * 0.35);
-  ctx.lineTo(pl.x - pl.r * 0.95, pl.y + pl.r * 0.75);
-  ctx.closePath();
+  ctx.arc(pl.x, pl.y, pl.r, 0, Math.PI*2);
   ctx.fill();
-  ctx.fillStyle = '#ff9e66';
+  ctx.fillStyle = pl.moving ? '#5a6a9a' : '#ffcf66';
   ctx.beginPath();
-  ctx.arc(pl.x, pl.y - pl.r * 0.15, pl.r * 0.35, 0, Math.PI*2);
-  ctx.fill();
-  // Thruster flame
-  ctx.fillStyle = '#3ad1ff';
-  const flick = 0.6 + Math.random() * 0.5;
-  ctx.beginPath();
-  ctx.moveTo(pl.x - pl.r * 0.4, pl.y + pl.r * 0.7);
-  ctx.lineTo(pl.x, pl.y + pl.r * 0.7 + pl.r * flick);
-  ctx.lineTo(pl.x + pl.r * 0.4, pl.y + pl.r * 0.7);
-  ctx.closePath();
+  ctx.arc(pl.x + pl.aim.x * (pl.r + 4), pl.y + pl.aim.y * (pl.r + 4),
+          pl.r * 0.45, 0, Math.PI*2);
   ctx.fill();
   ctx.globalAlpha = 1;
 
@@ -406,28 +396,53 @@ function step(dt){
   const p = S.player;
   S.t += dt;
 
-  // Player is locked near the bottom — X only.
-  p.y = H - 70;
-  const maxStep = p.baseSpd * p.spdMul * dt;
-  const kdx = getKeyDX();
-  if(kdx !== 0){
-    p.x += kdx * maxStep;
+  // --- Movement: 2D drag-to-move, stopping unleashes weapons. ---
+  const speed = p.baseSpd * p.spdMul;
+  const maxStep = speed * dt;
+  let moved = false;
+  const kv = getKeyVec();
+  if(kv){
+    p.x += kv.x * maxStep;
+    p.y += kv.y * maxStep;
+    moved = true;
   } else {
-    const tx = getTargetX();
-    if(tx !== null){
-      const diff = tx - p.x;
-      if(Math.abs(diff) <= maxStep) p.x = tx;
-      else p.x += Math.sign(diff) * maxStep;
+    const tp = getTargetScreen();
+    if(tp){
+      // Touch is in screen coords; convert to world using the camera.
+      const wx = tp.x - W/2 + S.cam.x;
+      const wy = tp.y - H/2 + S.cam.y;
+      const dx = wx - p.x, dy = wy - p.y;
+      const d = Math.hypot(dx, dy);
+      const stopDist = 4;
+      if(d > stopDist){
+        const stepLen = Math.min(d - stopDist, maxStep);
+        p.x += (dx/d) * stepLen;
+        p.y += (dy/d) * stepLen;
+        moved = stepLen > 0.5;
+      }
     }
   }
-  p.x = clamp(p.x, p.r + 8, W - p.r - 8);
+  p.moving = moved;
+
+  // --- Auto-aim at the nearest enemy. ---
+  let nearest = null, nd = Infinity;
+  for(const e of S.enemies){
+    const ex = e.x - p.x, ey = e.y - p.y;
+    const d2 = ex*ex + ey*ey;
+    if(d2 < nd){ nd = d2; nearest = e; }
+  }
+  if(nearest){
+    const ex = nearest.x - p.x, ey = nearest.y - p.y;
+    const d = Math.hypot(ex, ey) + 1e-3;
+    p.aim.x = ex/d; p.aim.y = ey/d;
+  }
 
   p.invuln -= dt;
   if(p.regen > 0) p.hp = Math.min(p.maxHp, p.hp + p.regen * dt);
 
-  // No camera — the world is the screen.
-  S.cam.x = 0;
-  S.cam.y = 0;
+  // Camera follow.
+  S.cam.x += (p.x - S.cam.x) * Math.min(1, dt * 9);
+  S.cam.y += (p.y - S.cam.y) * Math.min(1, dt * 9);
 
   updateSpawner(dt);
   updateEnemies(dt);
