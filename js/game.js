@@ -270,14 +270,20 @@ function gameOver(){
   }
   checkHeroUnlocks();
   saveMeta();
+  const pName = getPlayerName();
+  let rank = -1;
+  if(pName) rank = submitScore(pName, S.room, S.kills, S.lvl, S.t);
   let summary =
     `ROOM: <b>${S.room}</b><br>` +
     `TIME: <b>${fmtTime(S.t)}</b><br>` +
     `LEVEL: <b>${S.lvl}</b><br>` +
     `KILLS: <b>${S.kills}</b><br>` +
     `GOLD EARNED: <b>+${earned}</b>`;
+  if(rank > 0){
+    summary += `<br><br><span style="color:#7ad6ff"># ${rank} ON LEADERBOARD</span>`;
+  }
   if(S.newBiomeUnlocked){
-    summary += `<br><br><span style="color:#ffcf66">NEW BIOME: ${S.newBiomeUnlocked}</span>`;
+    summary += `<br><span style="color:#ffcf66">NEW BIOME: ${S.newBiomeUnlocked}</span>`;
   }
   document.getElementById('summary').innerHTML = summary;
   show('gameover');
@@ -649,6 +655,53 @@ function step(dt){
   }
 }
 
+// ---------- Sign-in / Leaderboard ----------
+const LB_KEY = 'killerhorde.lb';
+const PLAYER_KEY = 'killerhorde.player';
+
+function getPlayerName(){ return localStorage.getItem(PLAYER_KEY) || ''; }
+function setPlayerName(n){ localStorage.setItem(PLAYER_KEY, n); }
+
+function loadLB(){
+  try { return JSON.parse(localStorage.getItem(LB_KEY)) || []; }
+  catch(e){ return []; }
+}
+function saveLB(lb){ localStorage.setItem(LB_KEY, JSON.stringify(lb)); }
+
+function submitScore(name, room, kills, lvl, time){
+  const lb = loadLB();
+  const entry = {name, room, kills, lvl, time:Math.round(time), date:Date.now()};
+  lb.push(entry);
+  lb.sort((a,b) => b.room - a.room || b.kills - a.kills || a.time - b.time);
+  if(lb.length > 100) lb.length = 100;
+  saveLB(lb);
+  const rank = lb.indexOf(entry);
+  return rank >= 0 ? rank + 1 : -1;
+}
+
+function escHtml(s){
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function renderLeaderboard(){
+  const lb = loadLB();
+  const name = getPlayerName();
+  const div = document.getElementById('lb');
+  if(!lb.length){
+    div.innerHTML = '<p class="sub">No scores yet. Play a game!</p>';
+    return;
+  }
+  let html = '<table class="lb-table"><thead><tr><th>#</th><th>NAME</th><th>ROOM</th><th>KILLS</th><th>LV</th><th>TIME</th></tr></thead><tbody>';
+  const shown = lb.slice(0, 30);
+  for(let i = 0; i < shown.length; i++){
+    const s = shown[i];
+    const me = s.name === name ? ' class="me"' : '';
+    html += `<tr${me}><td class="rk">${i+1}</td><td>${escHtml(s.name)}</td><td>${s.room}</td><td>${s.kills}</td><td>${s.lvl}</td><td>${fmtTime(s.time)}</td></tr>`;
+  }
+  html += '</tbody></table>';
+  div.innerHTML = html;
+}
+
 // ---------- Menus / meta UI ----------
 function renderMeta(){
   document.getElementById('metaGold').textContent = meta.gold;
@@ -764,6 +817,19 @@ document.body.addEventListener('click', (e) => {
     hideAll(); renderChars(); show('charsScreen');
   } else if(a === 'biomes'){
     hideAll(); renderBiomes(); show('biomesScreen');
+  } else if(a === 'signin'){
+    const name = document.getElementById('nameInput').value.trim();
+    if(!name) return;
+    setPlayerName(name);
+    document.getElementById('playerTag').textContent = name;
+    hideAll(); show('menu');
+  } else if(a === 'changeName'){
+    e.preventDefault();
+    document.getElementById('nameInput').value = getPlayerName();
+    hideAll(); show('signin');
+  } else if(a === 'lb'){
+    hideAll(); renderLeaderboard(); show('lbScreen');
+    S.mode = 'menu'; S.paused = false;
   } else if(a === 'home'){
     hideAll(); show('menu'); S.mode = 'menu'; S.paused = false;
   } else if(a === 'retry'){
@@ -798,5 +864,18 @@ if(!meta.biomesUnlocked[S.biome.id]){
   meta.selectedBiome = 'city';
 }
 S.player = makePlayer();
+
+// Show signin or menu depending on saved player name
+const _savedName = getPlayerName();
+if(_savedName){
+  document.getElementById('playerTag').textContent = _savedName;
+  show('menu');
+} else {
+  show('signin');
+}
+
+document.getElementById('nameInput').addEventListener('keydown', (ev) => {
+  if(ev.key === 'Enter') document.querySelector('[data-act="signin"]').click();
+});
 
 requestAnimationFrame(loop);

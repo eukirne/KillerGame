@@ -79,7 +79,7 @@ window.addEventListener('keydown', e => {
   initAudio(); resumeAudio();
   keys[e.key.toLowerCase()] = true;
   if(e.key === 'Escape') togglePause();
-  if(e.key === ' ') e.preventDefault();
+  if(e.key === ' ' && e.target.tagName !== 'INPUT') e.preventDefault();
 });
 window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 

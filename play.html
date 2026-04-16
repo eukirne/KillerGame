@@ -28,13 +28,21 @@
     <button id="muteBtn" type="button">SND</button>
   </div>
 
-  <div id="menu" class="screen show">
+  <div id="signin" class="screen">
     <h1>KILLER<span>HORDE</span></h1>
-    <p class="sub">Dodge. Stop. Shoot. Next room.</p>
+    <p class="sub">Enter your name to compete</p>
+    <input id="nameInput" type="text" maxlength="16" placeholder="Your name..." autocomplete="off" spellcheck="false" />
+    <button data-act="signin">LET'S GO</button>
+  </div>
+
+  <div id="menu" class="screen">
+    <h1>KILLER<span>HORDE</span></h1>
+    <p class="sub"><span id="playerTag"></span> · <a href="#" data-act="changeName" style="color:#5a7abd;font-size:11px">change</a></p>
     <button data-act="play">PLAY</button>
     <button data-act="meta">UPGRADES</button>
     <button data-act="chars">HEROES</button>
     <button data-act="biomes">BIOMES</button>
+    <button data-act="lb">LEADERBOARD</button>
     <div class="hint">Touch anywhere — a joystick pops up under your thumb. Weapons auto-fire at the nearest enemy while you stand still. Clear every room to advance; every 5th is a boss.</div>
   </div>
 
@@ -48,6 +56,7 @@
     <h2>YOU DIED</h2>
     <div id="summary"></div>
     <button data-act="retry">PLAY AGAIN</button>
+    <button data-act="lb">LEADERBOARD</button>
     <button data-act="home">HOME</button>
   </div>
 
@@ -67,6 +76,12 @@
   <div id="biomesScreen" class="screen scrollscreen">
     <h2>BIOMES</h2>
     <div id="biomes"></div>
+    <button data-act="home">BACK</button>
+  </div>
+
+  <div id="lbScreen" class="screen scrollscreen">
+    <h2>LEADERBOARD</h2>
+    <div id="lb"></div>
     <button data-act="home">BACK</button>
   </div>
 

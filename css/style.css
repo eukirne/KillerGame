@@ -45,3 +45,11 @@ button:active{transform:translateY(2px);box-shadow:0 2px 0 #0c1326}
 #summary{color:#b7c4e6;text-align:center;margin-bottom:10px;line-height:1.8;font:600 14px ui-monospace,monospace}
 #summary b{color:#7ad6ff}
 #rerollBtn{margin-top:6px;background:linear-gradient(180deg,#3a2b6a,#2a1a44);border-color:#7d4a9d}
+#nameInput{background:#0a0f1e;border:2px solid #4a5f9d;border-radius:10px;padding:14px 18px;font:800 20px system-ui;color:#fff;text-align:center;width:min(320px,80vw);letter-spacing:3px;outline:none;-webkit-user-select:text;user-select:text}
+#nameInput:focus{border-color:#7ad6ff;box-shadow:0 0 16px rgba(58,209,255,.3)}
+#nameInput::placeholder{color:#3a4566;letter-spacing:2px;font-weight:600}
+.lb-table{width:min(440px,94vw);border-collapse:collapse;margin-bottom:10px}
+.lb-table th{color:#7ad6ff;font:700 10px ui-monospace,Menlo,monospace;text-align:left;padding:6px 8px;border-bottom:1px solid #2e3a68;letter-spacing:1px}
+.lb-table td{font:600 12px ui-monospace,Menlo,monospace;color:#b7c4e6;padding:5px 8px;border-bottom:1px solid #141b38}
+.lb-table tr.me td{color:#ffcf66}
+.lb-table .rk{color:#5a7abd}
