@@ -10,14 +10,25 @@ const sfxLastT = {};
 function initAudio(){
   if(audioCtx) return;
   try {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    // Immediately try to resume for mobile browsers.
+    const AC = window.AudioContext || window.webkitAudioContext;
+    audioCtx = new AC({latencyHint: 'interactive', sampleRate: 44100});
     if(audioCtx.state === 'suspended') audioCtx.resume();
   } catch(e){}
 }
 
 function resumeAudio(){
   if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+// --- Shared noise buffer (pre-generated on first use) ---
+let noiseBuf = null;
+function getNoiseBuf(){
+  if(noiseBuf) return noiseBuf;
+  const len = audioCtx.sampleRate; // 1 second of noise
+  noiseBuf = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+  const d = noiseBuf.getChannelData(0);
+  for(let i=0;i<len;i++) d[i] = Math.random()*2-1;
+  return noiseBuf;
 }
 
 // --- Primitives ---
@@ -33,24 +44,20 @@ function playTone(freq, dur, type, vol, endFreq){
   gain.gain.setValueAtTime((vol || 0.15) * audioVol, t);
   gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
   osc.connect(gain).connect(audioCtx.destination);
-  osc.start(t);
+  osc.start();
   osc.stop(t + dur);
 }
 
 function playNoise(dur, vol){
   if(!audioCtx || audioMuted) return;
   const t = audioCtx.currentTime;
-  const len = Math.max(1, (audioCtx.sampleRate * dur) | 0);
-  const buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
-  const d = buf.getChannelData(0);
-  for(let i=0;i<d.length;i++) d[i] = Math.random()*2-1;
   const src = audioCtx.createBufferSource();
-  src.buffer = buf;
+  src.buffer = getNoiseBuf();
   const gain = audioCtx.createGain();
   gain.gain.setValueAtTime((vol || 0.1) * audioVol, t);
   gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
   src.connect(gain).connect(audioCtx.destination);
-  src.start(t);
+  src.start(0, 0, dur);
 }
 
 // --- Throttle helper ---
