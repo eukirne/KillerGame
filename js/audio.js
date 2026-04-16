@@ -4,13 +4,15 @@
 
 let audioCtx = null;
 let audioMuted = false;
-const audioVol = 0.35;
+const audioVol = 1.0;
 const sfxLastT = {};
 
 function initAudio(){
   if(audioCtx) return;
   try {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    // Immediately try to resume for mobile browsers.
+    if(audioCtx.state === 'suspended') audioCtx.resume();
   } catch(e){}
 }
 
@@ -65,54 +67,54 @@ function throttledSfx(name, minGap){
 
 const sfx = {
   shoot(){
-    playTone(880, 0.07, 'square', 0.1);
+    playTone(880, 0.08, 'square', 0.25);
   },
   seekerShoot(){
-    playTone(660, 0.09, 'sawtooth', 0.08, 440);
+    playTone(660, 0.1, 'sawtooth', 0.2, 440);
   },
   hit(){
-    playNoise(0.04, 0.1);
-    playTone(220, 0.04, 'square', 0.06);
+    playNoise(0.05, 0.2);
+    playTone(220, 0.05, 'square', 0.15);
   },
   kill(){
-    playTone(500, 0.09, 'square', 0.1, 260);
-    playNoise(0.06, 0.08);
+    playTone(500, 0.1, 'square', 0.25, 260);
+    playNoise(0.07, 0.18);
   },
   playerHit(){
-    playNoise(0.1, 0.2);
-    playTone(110, 0.12, 'sawtooth', 0.12, 55);
+    playNoise(0.12, 0.4);
+    playTone(110, 0.15, 'sawtooth', 0.3, 55);
   },
   pickup(){
-    playTone(1200, 0.05, 'sine', 0.06, 1600);
+    playTone(1200, 0.06, 'sine', 0.18, 1600);
   },
   levelUp(){
-    playTone(523, 0.08, 'square', 0.12);
-    setTimeout(() => playTone(659, 0.08, 'square', 0.12), 70);
-    setTimeout(() => playTone(784, 0.12, 'square', 0.15), 140);
+    playTone(523, 0.1, 'square', 0.3);
+    setTimeout(() => playTone(659, 0.1, 'square', 0.3), 80);
+    setTimeout(() => playTone(784, 0.14, 'square', 0.35), 160);
   },
   roomClear(){
-    playTone(440, 0.08, 'square', 0.1);
-    setTimeout(() => playTone(554, 0.08, 'square', 0.1), 90);
-    setTimeout(() => playTone(659, 0.08, 'square', 0.1), 180);
-    setTimeout(() => playTone(880, 0.18, 'square', 0.15), 270);
+    playTone(440, 0.1, 'square', 0.25);
+    setTimeout(() => playTone(554, 0.1, 'square', 0.25), 100);
+    setTimeout(() => playTone(659, 0.1, 'square', 0.25), 200);
+    setTimeout(() => playTone(880, 0.2, 'square', 0.35), 300);
   },
   boss(){
-    playTone(75, 0.35, 'sawtooth', 0.2, 38);
-    playNoise(0.25, 0.15);
+    playTone(75, 0.4, 'sawtooth', 0.4, 38);
+    playNoise(0.3, 0.35);
   },
   nova(){
-    playNoise(0.15, 0.18);
-    playTone(190, 0.2, 'sine', 0.12, 70);
+    playNoise(0.18, 0.35);
+    playTone(190, 0.22, 'sine', 0.25, 70);
   },
   thunder(){
-    playNoise(0.1, 0.22);
-    playTone(100, 0.12, 'square', 0.15, 900);
+    playNoise(0.12, 0.4);
+    playTone(100, 0.14, 'square', 0.3, 900);
   },
   tap(){
-    playTone(1100, 0.04, 'square', 0.08);
+    playTone(1100, 0.05, 'square', 0.2);
   },
   explode(){
-    playNoise(0.15, 0.25);
-    playTone(80, 0.18, 'square', 0.12, 30);
+    playNoise(0.18, 0.45);
+    playTone(80, 0.2, 'square', 0.25, 30);
   },
 };

@@ -76,6 +76,7 @@ function fmtTime(t){
 // ---------- Input: keyboard ----------
 const keys = {};
 window.addEventListener('keydown', e => {
+  initAudio(); resumeAudio();
   keys[e.key.toLowerCase()] = true;
   if(e.key === 'Escape') togglePause();
   if(e.key === ' ') e.preventDefault();
@@ -105,6 +106,7 @@ const TAP_MAX_MS = 220;
 const TAP_MAX_DIST = 24;
 
 function startTouch(id, x, y){
+  initAudio(); resumeAudio();
   if(S.mode !== 'playing' || S.paused) return;
   touch.active = true;
   touch.id = id;
