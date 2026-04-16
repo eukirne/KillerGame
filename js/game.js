@@ -32,6 +32,7 @@ function placeAtArenaEdge(e){
 function forceFireAll(){
   if(!S.player || S.mode !== 'playing') return;
   const p = S.player;
+  let fired = false;
   for(const id in p.weapons){
     if(id === 'orbit' || id === 'aura') continue;
     const w = p.weapons[id];
@@ -39,7 +40,9 @@ function forceFireAll(){
     const lvl = def.l[w.level - 1];
     fireWeapon(id, lvl);
     w.t = Math.min(w.t, 0.08);
+    fired = true;
   }
+  if(fired) sfx.tap();
 }
 
 function startRoom(){
@@ -70,6 +73,7 @@ function updateSpawner(dt){
         b.hpMax = b.hp;
         popup('BOSS', p.x, p.y - 60, '#ff4466');
         S.shake = 12;
+        sfx.boss();
         S.roomSpawnLeft = 0;
       } else {
         // Small batch per tick so waves feel like pressure, not a trickle.
@@ -90,6 +94,7 @@ function updateSpawner(dt){
       const healAmt = 8 + Math.floor(S.room * 0.6);
       p.hp = Math.min(p.maxHp, p.hp + healAmt);
       popup('ROOM ' + S.room + ' CLEAR', p.x, p.y - 40, '#ffcf66');
+      sfx.roomClear();
       // Bonus XP so upgrade cards pace with room clears.
       gainXp(3 + S.room * 0.4);
     }
@@ -158,6 +163,7 @@ function triggerLevelUp(){
   renderLevelUpChoices();
   show('levelup');
   S.paused = true;
+  sfx.levelUp();
 }
 
 function renderLevelUpChoices(){
@@ -200,6 +206,8 @@ function doReroll(){
 
 // ---------- Start / end run ----------
 function startRun(){
+  initAudio();
+  resumeAudio();
   S.mode = 'playing';
   S.player = makePlayer();
   applyMetaAndHero(S.player);
@@ -712,6 +720,13 @@ document.body.addEventListener('click', (e) => {
 });
 
 document.getElementById('pauseBtn').addEventListener('click', togglePause);
+
+const muteBtn = document.getElementById('muteBtn');
+muteBtn.addEventListener('click', () => {
+  audioMuted = !audioMuted;
+  muteBtn.textContent = audioMuted ? 'OFF' : 'SND';
+  muteBtn.classList.toggle('muted', audioMuted);
+});
 
 // ---------- Init ----------
 S.hero = HEROES.find(h => h.id === meta.selectedHero) || HEROES[0];

@@ -91,6 +91,7 @@ function damage(e, amt){
   e.hp -= d;
   e.hitFlash = 1;
   popup(d, e.x + (Math.random()-0.5)*10, e.y - e.r - 2, '#ffffff');
+  throttledSfx('hit', 0.06);
 }
 
 // ---------- Weapons ----------
@@ -154,7 +155,6 @@ function fireWeapon(id, lvl){
   const p = S.player;
 
   if(id === 'shard'){
-    // Aim at the nearest enemy (computed each frame in step).
     const base = Math.atan2(p.aim.y, p.aim.x);
     const spread = Math.min(0.9, 0.16 * (lvl.n - 1));
     for(let i=0;i<lvl.n;i++){
@@ -167,6 +167,7 @@ function fireWeapon(id, lvl){
         life:1.4, sz:lvl.sz, col:'#7ad6ff', hits:{}
       });
     }
+    throttledSfx('shoot', 0.05);
     return;
   }
 
@@ -184,6 +185,7 @@ function fireWeapon(id, lvl){
         spd:lvl.spd, target:null
       });
     }
+    throttledSfx('seekerShoot', 0.08);
     return;
   }
 
@@ -194,6 +196,7 @@ function fireWeapon(id, lvl){
       life:0.45, col:'#b27aff', hits:{}
     });
     S.shake = Math.max(S.shake, 6);
+    sfx.nova();
     return;
   }
 
@@ -210,6 +213,7 @@ function fireWeapon(id, lvl){
         target:e, hit:false
       });
     }
+    throttledSfx('thunder', 0.08);
     return;
   }
 }
@@ -303,6 +307,7 @@ function updateProjectiles(dt){
           pl.invuln = 0.6;
           popup('-' + d, pl.x, pl.y - 22, '#ff6680');
           S.flash = 0.2;
+          throttledSfx('playerHit', 0.2);
         }
         p.life = 0;
       }
@@ -386,11 +391,13 @@ function updateEnemies(dt){
         S.shake = Math.max(S.shake, 5);
         S.flash = 0.22;
         popup('-' + dmgTaken, p.x, p.y - 22, '#ff6680');
+        throttledSfx('playerHit', 0.2);
       }
       if(e.explode){
         e.hp = 0;
         burst(e.x, e.y, '#ffde66', 18);
         S.shake = Math.max(S.shake, 5);
+        throttledSfx('explode', 0.08);
       }
     }
 
@@ -405,6 +412,7 @@ function updateEnemies(dt){
       });
       burst(e.x, e.y, e.col, e.boss ? 40 : 8);
       if(e.boss){ S.shake = Math.max(S.shake, 14); }
+      throttledSfx('kill', 0.04);
       S.enemies.splice(i, 1);
     }
   }
@@ -430,6 +438,7 @@ function updatePickups(dt){
         const amt = k.val * (1 + metaBonus('xpMul')) * p.lootMul;
         gainXp(amt);
       }
+      throttledSfx('pickup', 0.03);
       S.pickups.splice(i, 1);
     }
   }

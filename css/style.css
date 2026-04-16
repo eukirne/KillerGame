@@ -31,6 +31,8 @@ button:active{transform:translateY(2px);box-shadow:0 2px 0 #0c1326}
 .choice.new .ctitle{color:#ffb380}
 .choice.new .clvl{color:#ff9e66}
 #pauseBtn{position:absolute;top:14px;right:14px;width:38px;height:38px;min-width:0;padding:0;font-size:13px;letter-spacing:0;opacity:.75;pointer-events:auto}
+#muteBtn{position:absolute;top:14px;right:58px;width:38px;height:38px;min-width:0;padding:0;font-size:10px;letter-spacing:0;opacity:.75;pointer-events:auto}
+#muteBtn.muted{opacity:.4}
 #upgrades,#chars,#biomes{display:flex;flex-direction:column;gap:8px;width:min(440px,94vw);margin-bottom:14px}
 .card{background:#141b38;border:1px solid #2e3a68;border-radius:10px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px}
 .card.owned{border-color:#3ad1ff;box-shadow:0 0 12px rgba(58,209,255,.15)}
