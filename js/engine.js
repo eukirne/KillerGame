@@ -27,6 +27,7 @@ const S = {
   roomSpawnTimer: 0,
   roomKind: 'normal',     // 'normal' | 'boss'
   roomClearT: 0,
+  arena: {x:-600, y:-420, w:1200, h:840},
   shake: 0,
   flash: 0,
   rerollsLeft: 0,
@@ -85,7 +86,10 @@ window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 // First touch plants a base circle where the finger lands; the stick
 // tracks the finger clamped to `radius`, with the base sliding along
 // with the finger once it crosses the edge (adaptive origin).
-const touch = {active:false, id:null, x:0, y:0};
+const touch = {
+  active:false, id:null, x:0, y:0,
+  startX:0, startY:0, startT:0, moved:false,
+};
 const joy = {
   active:false,
   baseX:0, baseY:0,      // screen-space center of the joystick
@@ -95,11 +99,19 @@ const joy = {
   radius:62,             // max stick travel from base
 };
 
+// Tap detection thresholds: a quick tap (short duration, small drift)
+// triggers an instant volley via forceFireAll (defined in game.js).
+const TAP_MAX_MS = 220;
+const TAP_MAX_DIST = 24;
+
 function startTouch(id, x, y){
   if(S.mode !== 'playing' || S.paused) return;
   touch.active = true;
   touch.id = id;
   touch.x = x; touch.y = y;
+  touch.startX = x; touch.startY = y;
+  touch.startT = performance.now();
+  touch.moved = false;
   joy.active = true;
   joy.baseX = x; joy.baseY = y;
   joy.stickX = x; joy.stickY = y;
@@ -108,6 +120,10 @@ function startTouch(id, x, y){
 function moveTouch(id, x, y){
   if(!touch.active || touch.id !== id) return;
   touch.x = x; touch.y = y;
+  if(!touch.moved){
+    const ddx = x - touch.startX, ddy = y - touch.startY;
+    if(ddx*ddx + ddy*ddy > TAP_MAX_DIST * TAP_MAX_DIST) touch.moved = true;
+  }
   let offX = x - joy.baseX;
   let offY = y - joy.baseY;
   const m = Math.hypot(offX, offY);
@@ -132,10 +148,14 @@ function moveTouch(id, x, y){
 }
 function endTouch(id){
   if(touch.active && touch.id === id){
+    const wasTap = !touch.moved && (performance.now() - touch.startT < TAP_MAX_MS);
     touch.active = false;
     touch.id = null;
     joy.active = false;
     joy.mag = 0;
+    // forceFireAll is defined in game.js; this runs at user-input time,
+    // long after all scripts have loaded.
+    if(wasTap && typeof forceFireAll === 'function') forceFireAll();
   }
 }
 

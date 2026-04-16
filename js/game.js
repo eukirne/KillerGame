@@ -6,6 +6,42 @@
 // Archero-style room loop: each room drip-spawns a budget of enemies,
 // clearing them heals the player and advances to the next room. Every
 // 5th room is a boss encounter.
+
+// Place an enemy along one of the arena's four walls, preferring
+// positions far from the player.
+function placeAtArenaEdge(e){
+  const a = S.arena;
+  const p = S.player;
+  const m = e.r + 12;
+  let bx = 0, by = 0, bd = -1;
+  for(let k=0;k<5;k++){
+    const edge = (Math.random()*4)|0;
+    let tx, ty;
+    if(edge===0)     { tx=rand(a.x+m, a.x+a.w-m); ty=a.y+m; }
+    else if(edge===1){ tx=a.x+a.w-m; ty=rand(a.y+m, a.y+a.h-m); }
+    else if(edge===2){ tx=rand(a.x+m, a.x+a.w-m); ty=a.y+a.h-m; }
+    else             { tx=a.x+m; ty=rand(a.y+m, a.y+a.h-m); }
+    const dd = (tx-p.x)*(tx-p.x)+(ty-p.y)*(ty-p.y);
+    if(dd>bd){ bd=dd; bx=tx; by=ty; }
+  }
+  e.x = bx; e.y = by;
+}
+
+// Tap-to-fire: fires all gated weapons instantly, bypassing their
+// cooldown. Rapid tapping gives a meaningful DPS boost.
+function forceFireAll(){
+  if(!S.player || S.mode !== 'playing') return;
+  const p = S.player;
+  for(const id in p.weapons){
+    if(id === 'orbit' || id === 'aura') continue;
+    const w = p.weapons[id];
+    const def = WEAPONS[id];
+    const lvl = def.l[w.level - 1];
+    fireWeapon(id, lvl);
+    w.t = Math.min(w.t, 0.08);
+  }
+}
+
 function startRoom(){
   const n = S.room;
   S.roomState = 'fighting';
@@ -28,6 +64,7 @@ function updateSpawner(dt){
     if(S.roomSpawnTimer <= 0 && S.roomSpawnLeft > 0){
       if(S.roomKind === 'boss'){
         const b = spawnEnemy('boss');
+        placeAtArenaEdge(b);
         const scale = 1 + Math.max(0, S.room / 5 - 1) * 0.55;
         b.hp = Math.round(b.hp * scale);
         b.hpMax = b.hp;
@@ -39,7 +76,8 @@ function updateSpawner(dt){
         const batch = Math.min(S.roomSpawnLeft, 1 + Math.floor(S.room / 4));
         for(let i=0;i<batch;i++){
           const t = pickWeighted(S.biome.pool, S.biome.weights);
-          spawnEnemy(t);
+          const e = spawnEnemy(t);
+          placeAtArenaEdge(e);
         }
         S.roomSpawnLeft -= batch;
         S.roomSpawnTimer = Math.max(0.25, 0.9 - S.room * 0.03);
@@ -173,6 +211,11 @@ function startRun(){
   S.pickups = [];
   S.parts = [];
   S.pops = [];
+  // Fixed arena per run, sized so the screen fits comfortably but
+  // large enough that movement matters on big displays.
+  const aw = Math.min(1280, Math.max(720, W * 1.35));
+  const ah = Math.min(1040, Math.max(620, H * 0.9));
+  S.arena = {x: -aw/2, y: -ah/2, w: aw, h: ah};
   S.cam.x = 0; S.cam.y = 0;
   S.t = 0;
   S.kills = 0;
@@ -287,6 +330,17 @@ function render(){
   for(let x=x0;x<right;x+=gs){ ctx.moveTo(x, top); ctx.lineTo(x, bottom); }
   for(let y=y0;y<bottom;y+=gs){ ctx.moveTo(left, y); ctx.lineTo(right, y); }
   ctx.stroke();
+
+  // Arena walls — glowing border + faint inner line.
+  const ar = S.arena;
+  ctx.strokeStyle = '#7ad6ff';
+  ctx.lineWidth = 3;
+  ctx.globalAlpha = 0.75;
+  ctx.strokeRect(ar.x, ar.y, ar.w, ar.h);
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = 'rgba(122,214,255,0.18)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(ar.x + 6, ar.y + 6, ar.w - 12, ar.h - 12);
 
   // Pickups
   for(const k of S.pickups){
@@ -470,6 +524,11 @@ function step(dt){
   }
   p.moving = moved;
 
+  // Clamp to arena bounds.
+  const a = S.arena;
+  p.x = clamp(p.x, a.x + p.r, a.x + a.w - p.r);
+  p.y = clamp(p.y, a.y + p.r, a.y + a.h - p.r);
+
   // --- Auto-aim at the nearest enemy. ---
   let nearest = null, nd = Infinity;
   for(const e of S.enemies){
@@ -486,9 +545,13 @@ function step(dt){
   p.invuln -= dt;
   if(p.regen > 0) p.hp = Math.min(p.maxHp, p.hp + p.regen * dt);
 
-  // Camera follow.
+  // Camera follow, clamped so it never shows outside the arena.
   S.cam.x += (p.x - S.cam.x) * Math.min(1, dt * 9);
   S.cam.y += (p.y - S.cam.y) * Math.min(1, dt * 9);
+  if(a.w >= W) S.cam.x = clamp(S.cam.x, a.x + W/2, a.x + a.w - W/2);
+  else S.cam.x = a.x + a.w / 2;
+  if(a.h >= H) S.cam.y = clamp(S.cam.y, a.y + H/2, a.y + a.h - H/2);
+  else S.cam.y = a.y + a.h / 2;
 
   updateSpawner(dt);
   updateEnemies(dt);

@@ -9,7 +9,7 @@ function makePlayer(){
   return {
     x:0, y:0, r:16,
     hp:100, maxHp:100,
-    baseSpd:260,             // 2D movement speed (px/s)
+    baseSpd:340,             // 2D movement speed (px/s)
     dmgMul:1, spdMul:1, cdMul:1, magMul:1, lootMul:1,
     armor:0, regen:0,
     invuln:0,
@@ -348,7 +348,7 @@ function spawnEnemy(type){
 
 function updateEnemies(dt){
   const p = S.player;
-  const maxD = Math.max(W, H) * 1.6;
+  const ar = S.arena;
   for(let i=S.enemies.length-1;i>=0;i--){
     const e = S.enemies[i];
     e.hitFlash = Math.max(0, e.hitFlash - dt * 4);
@@ -356,16 +356,14 @@ function updateEnemies(dt){
     let dx = p.x - e.x, dy = p.y - e.y;
     const d = Math.hypot(dx, dy) + 1e-3;
 
-    // Despawn if the player drifted absurdly far.
-    if(d > maxD){
-      S.enemies.splice(i, 1);
-      continue;
-    }
-
     dx /= d; dy /= d;
     e.x += dx * e.spd * dt + e.kx * dt;
     e.y += dy * e.spd * dt + e.ky * dt;
     e.kx *= 0.85; e.ky *= 0.85;
+
+    // Clamp to arena bounds.
+    e.x = clamp(e.x, ar.x + e.r, ar.x + ar.w - e.r);
+    e.y = clamp(e.y, ar.y + e.r, ar.y + ar.h - e.r);
 
     if(e.ranged){
       e.shootT -= dt;
