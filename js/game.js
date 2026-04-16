@@ -54,9 +54,8 @@ function startRoom(){
     S.roomSpawnLeft = 1;
   } else {
     S.roomKind = 'normal';
-    // Budget ramps with room number but plateaus so late rooms stay
-    // about damage density, not raw enemy count.
-    S.roomSpawnLeft = Math.min(42, 5 + Math.floor(n * 1.8));
+    // Budget ramps with room number; higher cap keeps pressure up.
+    S.roomSpawnLeft = Math.min(55, 6 + Math.floor(n * 2.2));
   }
 }
 
@@ -68,30 +67,39 @@ function updateSpawner(dt){
       if(S.roomKind === 'boss'){
         const b = spawnEnemy('boss');
         placeAtArenaEdge(b);
-        const scale = 1 + Math.max(0, S.room / 5 - 1) * 0.55;
+        const scale = 1 + Math.max(0, S.room / 5 - 1) * 0.5;
         b.hp = Math.round(b.hp * scale);
         b.hpMax = b.hp;
-        popup('BOSS', p.x, p.y - 60, '#ff4466');
+        // Assign boss type — cycles through charger, spreader, summoner
+        const bossTypes = ['charger', 'spreader', 'summoner'];
+        b.bossType = bossTypes[((S.room / 5 | 0) - 1) % 3];
+        b.bossPhase = 'chase';
+        b.bossTimer = 1.8 + Math.random() * 0.5;
+        b.telegraphT = 0;
+        b.chargeX = 0; b.chargeY = 0;
+        b.enraged = false;
+        const names = {charger:'CHARGER', spreader:'SPREADER', summoner:'SUMMONER'};
+        popup(names[b.bossType] + ' BOSS', p.x, p.y - 60, '#ff4466');
         S.shake = 12;
         sfx.boss();
         S.roomSpawnLeft = 0;
       } else {
         // Small batch per tick so waves feel like pressure, not a trickle.
-        const batch = Math.min(S.roomSpawnLeft, 1 + Math.floor(S.room / 4));
+        const batch = Math.min(S.roomSpawnLeft, 2 + Math.floor(S.room / 3));
         for(let i=0;i<batch;i++){
           const t = pickWeighted(S.biome.pool, S.biome.weights);
           const e = spawnEnemy(t);
           placeAtArenaEdge(e);
         }
         S.roomSpawnLeft -= batch;
-        S.roomSpawnTimer = Math.max(0.25, 0.9 - S.room * 0.03);
+        S.roomSpawnTimer = Math.max(0.18, 0.7 - S.room * 0.025);
       }
     }
     // Room cleared when no more to spawn and the field is empty.
     if(S.roomSpawnLeft <= 0 && S.enemies.length === 0){
       S.roomState = 'cleared';
       S.roomClearT = 1.4;
-      const healAmt = 8 + Math.floor(S.room * 0.6);
+      const healAmt = 5 + Math.floor(S.room * 0.25);
       p.hp = Math.min(p.maxHp, p.hp + healAmt);
       popup('ROOM ' + S.room + ' CLEAR', p.x, p.y - 40, '#ffcf66');
       sfx.roomClear();
@@ -360,6 +368,56 @@ function render(){
 
   // Enemies
   for(const e of S.enemies){
+    // Boss telegraph visuals (behind the boss sprite)
+    if(e.boss && e.bossPhase === 'telegraph'){
+      const prog = (e.telegraphT || 0) / 0.65;
+      if(e.bossType === 'charger'){
+        ctx.strokeStyle = '#ff4466';
+        ctx.lineWidth = 3;
+        ctx.globalAlpha = 0.3 + 0.4 * Math.sin(prog * Math.PI * 6);
+        ctx.setLineDash([12, 8]);
+        ctx.beginPath();
+        ctx.moveTo(e.x, e.y);
+        ctx.lineTo(e.chargeX, e.chargeY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+      } else if(e.bossType === 'spreader'){
+        ctx.strokeStyle = '#ff4466';
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.2 + 0.3 * Math.sin(prog * Math.PI * 8);
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, 30 + prog * 140, 0, Math.PI*2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      } else if(e.bossType === 'summoner'){
+        ctx.strokeStyle = '#b85cff';
+        ctx.lineWidth = 3;
+        ctx.globalAlpha = 0.3 + 0.4 * Math.sin(prog * Math.PI * 6);
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, e.r + 10 + prog * 25, 0, Math.PI*2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+    }
+    // Charging boss: red glow
+    if(e.boss && e.bossPhase === 'charging'){
+      ctx.fillStyle = 'rgba(255,68,102,0.25)';
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.r + 10, 0, Math.PI*2);
+      ctx.fill();
+    }
+    // Enraged boss: pulsing red ring
+    if(e.boss && e.enraged){
+      ctx.strokeStyle = '#ff4466';
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = 0.5 + 0.3 * Math.sin(S.t * 8);
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.r + 4, 0, Math.PI*2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
     ctx.fillStyle = e.hitFlash > 0 ? '#fff' : e.col;
     ctx.beginPath();
     ctx.arc(e.x, e.y, e.r, 0, Math.PI*2);

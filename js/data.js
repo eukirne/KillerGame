@@ -96,13 +96,13 @@ const PASSIVES = {
 };
 
 const ENEMIES = {
-  walker:  {hp:18,  spd:52,  dmg:6,  r:14, col:'#7f8dbf', xp:1, gold:1},
-  runner:  {hp:10,  spd:108, dmg:5,  r:11, col:'#ff8a66', xp:1, gold:1},
-  shooter: {hp:22,  spd:60,  dmg:4,  r:13, col:'#66ffcc', xp:2, gold:2, ranged:true},
-  brute:   {hp:90,  spd:38,  dmg:12, r:22, col:'#b85cff', xp:4, gold:3},
-  tank:    {hp:200, spd:32,  dmg:16, r:26, col:'#66a3ff', xp:8, gold:6},
-  bomb:    {hp:18,  spd:78,  dmg:18, r:14, col:'#ffde66', xp:2, gold:2, explode:true},
-  boss:    {hp:1800,spd:44,  dmg:24, r:42, col:'#ff4466', xp:80,gold:60, boss:true},
+  walker:  {hp:24,  spd:60,  dmg:8,  r:14, col:'#7f8dbf', xp:1, gold:1},
+  runner:  {hp:14,  spd:122, dmg:7,  r:11, col:'#ff8a66', xp:1, gold:1},
+  shooter: {hp:28,  spd:68,  dmg:6,  r:13, col:'#66ffcc', xp:2, gold:2, ranged:true},
+  brute:   {hp:120, spd:44,  dmg:15, r:22, col:'#b85cff', xp:4, gold:3},
+  tank:    {hp:260, spd:36,  dmg:20, r:26, col:'#66a3ff', xp:8, gold:6},
+  bomb:    {hp:24,  spd:92,  dmg:24, r:14, col:'#ffde66', xp:2, gold:2, explode:true},
+  boss:    {hp:2400,spd:62,  dmg:30, r:42, col:'#ff4466', xp:80,gold:60, boss:true},
 };
 
 const BIOMES = [

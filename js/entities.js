@@ -323,9 +323,10 @@ function spawnEnemy(type){
   const base = ENEMIES[type];
   const a = Math.random() * Math.PI * 2;
   const r = Math.max(W, H) * 0.62 + 60;
-  const mins = S.t / 60;
-  const hpScale = 1 + mins * 0.38;
-  const dmgScale = 1 + mins * 0.14;
+  const room = S.room || 1;
+  const hpScale = 1 + (room - 1) * 0.16;
+  const dmgScale = 1 + (room - 1) * 0.07;
+  const spdScale = 1 + (room - 1) * 0.014;
   const e = {
     id: ENEMY_ID++,
     type,
@@ -334,7 +335,7 @@ function spawnEnemy(type){
     r: base.r,
     hp: Math.round(base.hp * hpScale),
     hpMax: 0,
-    spd: base.spd,
+    spd: Math.round(base.spd * spdScale),
     dmg: Math.round(base.dmg * dmgScale),
     col: base.col,
     xp: base.xp,
@@ -351,6 +352,43 @@ function spawnEnemy(type){
   return e;
 }
 
+// --- Boss attack execution ---
+function bossAttack(e, p){
+  const type = e.bossType;
+  if(type === 'charger'){
+    e.chargeX = p.x; e.chargeY = p.y;
+    e.bossPhase = 'charging';
+    e.bossTimer = 0.65;
+    sfx.boss();
+  } else if(type === 'spreader'){
+    const n = 10 + ((S.room / 5) | 0) * 2;
+    for(let k = 0; k < n; k++){
+      const a = (k / n) * Math.PI * 2;
+      S.projectiles.push({
+        type:'enemy', x:e.x, y:e.y,
+        vx:Math.cos(a)*210, vy:Math.sin(a)*210,
+        dmg:Math.round(e.dmg*0.5), life:2.4, sz:7, col:'#ff4466'
+      });
+    }
+    S.shake = Math.max(S.shake, 8);
+    sfx.explode();
+    e.bossPhase = 'recovering';
+    e.bossTimer = 1.4;
+  } else if(type === 'summoner'){
+    const count = 2 + Math.min(3, ((S.room / 10) | 0));
+    const pool = S.biome.pool;
+    for(let k = 0; k < count; k++){
+      const t = pool[(Math.random() * pool.length) | 0];
+      const ne = spawnEnemy(t);
+      ne.x = e.x + (Math.random()-0.5) * 80;
+      ne.y = e.y + (Math.random()-0.5) * 80;
+    }
+    sfx.boss();
+    e.bossPhase = 'recovering';
+    e.bossTimer = 2.2;
+  }
+}
+
 function updateEnemies(dt){
   const p = S.player;
   const ar = S.arena;
@@ -360,10 +398,52 @@ function updateEnemies(dt){
 
     let dx = p.x - e.x, dy = p.y - e.y;
     const d = Math.hypot(dx, dy) + 1e-3;
-
     dx /= d; dy /= d;
-    e.x += dx * e.spd * dt + e.kx * dt;
-    e.y += dy * e.spd * dt + e.ky * dt;
+
+    let mx = dx, my = dy, moveSpd = e.spd;
+
+    // --- Boss AI ---
+    if(e.boss && e.bossType){
+      e.bossTimer -= dt;
+      if(e.bossPhase === 'chase'){
+        if(e.bossTimer <= 0){
+          e.bossPhase = 'telegraph';
+          e.bossTimer = 0.65;
+          e.telegraphT = 0;
+          e.chargeX = p.x; e.chargeY = p.y;
+        }
+      } else if(e.bossPhase === 'telegraph'){
+        e.telegraphT += dt;
+        moveSpd = 0;
+        if(e.bossTimer <= 0) bossAttack(e, p);
+      } else if(e.bossPhase === 'charging'){
+        const cdx = e.chargeX - e.x, cdy = e.chargeY - e.y;
+        const cd = Math.hypot(cdx, cdy) + 1e-3;
+        mx = cdx / cd; my = cdy / cd;
+        moveSpd = e.spd * 4.5;
+        if(cd < 40 || e.bossTimer <= 0){
+          e.bossPhase = 'chase';
+          e.bossTimer = 1.5 + Math.random() * 1.0;
+          S.shake = Math.max(S.shake, 7);
+        }
+      } else if(e.bossPhase === 'recovering'){
+        moveSpd = e.spd * 0.3;
+        if(e.bossTimer <= 0){
+          e.bossPhase = 'chase';
+          e.bossTimer = 1.5 + Math.random() * 1.0;
+        }
+      }
+      // Enrage below 40% HP
+      if(e.hp < e.hpMax * 0.4 && !e.enraged){
+        e.enraged = true;
+        e.spd = Math.round(e.spd * 1.35);
+        S.shake = Math.max(S.shake, 8);
+        popup('ENRAGED', e.x, e.y - e.r - 16, '#ff4466');
+      }
+    }
+
+    e.x += mx * moveSpd * dt + e.kx * dt;
+    e.y += my * moveSpd * dt + e.ky * dt;
     e.kx *= 0.85; e.ky *= 0.85;
 
     // Clamp to arena bounds.
@@ -385,7 +465,9 @@ function updateEnemies(dt){
     // Contact with player.
     if(d < e.r + p.r){
       if(p.invuln <= 0){
-        const dmgTaken = Math.max(1, Math.round(e.dmg - p.armor));
+        let contactDmg = e.dmg;
+        if(e.boss && e.bossPhase === 'charging') contactDmg = Math.round(e.dmg * 2);
+        const dmgTaken = Math.max(1, Math.round(contactDmg - p.armor));
         p.hp -= dmgTaken;
         p.invuln = 0.6;
         S.shake = Math.max(S.shake, 5);
