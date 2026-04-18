@@ -537,10 +537,25 @@ function updateEnemies(dt){
       }
     }
 
-    // Velocity-based movement with gravity
+    // Planet avoidance - steer around gravity bodies
+    let avoidX = 0, avoidY = 0;
+    if(!(e.boss && e.bossPhase === 'charging')){
+      for(const b of S.bodies){
+        const bdx = e.x - b.x, bdy = e.y - b.y;
+        const bd = Math.hypot(bdx, bdy) + 1e-3;
+        const safeR = b.r + e.r + 65;
+        if(bd < safeR){
+          const strength = (1 - bd / safeR) * moveSpd * 6;
+          avoidX += (bdx / bd) * strength;
+          avoidY += (bdy / bd) * strength;
+        }
+      }
+    }
+
+    // Velocity-based movement with gravity + avoidance
     const chaseForce = moveSpd * 3.5;
-    e.vx += mx * chaseForce * dt;
-    e.vy += my * chaseForce * dt;
+    e.vx += (mx * chaseForce + avoidX) * dt;
+    e.vy += (my * chaseForce + avoidY) * dt;
 
     applyGravity(e, dt);
 

@@ -576,19 +576,40 @@ function render(){
       ctx.stroke();
       ctx.globalAlpha = 1;
     }
+    const evA = Math.atan2(e.vy||0, e.vx||0);
+    ctx.save();
+    ctx.translate(e.x, e.y);
+    ctx.rotate(evA);
     ctx.fillStyle = e.hitFlash > 0 ? '#fff' : e.col;
     ctx.beginPath();
-    ctx.arc(e.x, e.y, e.r, 0, Math.PI*2);
+    if(e.boss){
+      ctx.moveTo(e.r, 0);
+      ctx.lineTo(-e.r * 0.5, -e.r * 0.75);
+      ctx.lineTo(-e.r * 0.2, -e.r * 0.25);
+      ctx.lineTo(-e.r * 0.4, 0);
+      ctx.lineTo(-e.r * 0.2, e.r * 0.25);
+      ctx.lineTo(-e.r * 0.5, e.r * 0.75);
+    } else {
+      ctx.moveTo(e.r, 0);
+      ctx.lineTo(-e.r * 0.7, -e.r * 0.6);
+      ctx.lineTo(-e.r * 0.35, 0);
+      ctx.lineTo(-e.r * 0.7, e.r * 0.6);
+    }
+    ctx.closePath();
     ctx.fill();
-    if(!e.boss){
-      const evA = Math.atan2(e.vy||0, e.vx||0);
+    const eSpd = Math.hypot(e.vx||0, e.vy||0);
+    if(eSpd > 10){
       ctx.fillStyle = e.col;
-      ctx.globalAlpha = 0.3;
+      ctx.globalAlpha = 0.4 + 0.3 * Math.sin(S.t * 18 + e.id);
       ctx.beginPath();
-      ctx.arc(e.x - Math.cos(evA)*e.r*0.8, e.y - Math.sin(evA)*e.r*0.8, e.r*0.4, 0, Math.PI*2);
+      ctx.moveTo(-e.r * 0.45, -e.r * 0.22);
+      ctx.lineTo(-e.r * (0.8 + eSpd * 0.002), 0);
+      ctx.lineTo(-e.r * 0.45, e.r * 0.22);
+      ctx.closePath();
       ctx.fill();
       ctx.globalAlpha = 1;
     }
+    ctx.restore();
     if(e.boss){
       ctx.fillStyle = '#000';
       ctx.fillRect(e.x - e.r, e.y - e.r - 10, e.r * 2, 5);
@@ -657,10 +678,11 @@ function render(){
   // Player ship (triangle)
   const pl = S.player;
   if(pl.invuln > 0 && ((S.t * 18) | 0) % 2 === 0) ctx.globalAlpha = 0.45;
-  const aimA = Math.atan2(pl.aim.y, pl.aim.x);
+  const moveVel = Math.hypot(pl.vx, pl.vy);
+  const shipA = moveVel > pl.baseSpd * 0.15 ? Math.atan2(pl.vy, pl.vx) : Math.atan2(pl.aim.y, pl.aim.x);
   ctx.save();
   ctx.translate(pl.x, pl.y);
-  ctx.rotate(aimA);
+  ctx.rotate(shipA);
   ctx.fillStyle = '#ffffff';
   ctx.beginPath();
   ctx.moveTo(pl.r, 0);
@@ -801,7 +823,7 @@ function step(dt){
     targetVy = joy.dy * joy.mag * speed;
   }
 
-  const blend = Math.min(1, dt * 7);
+  const blend = Math.min(1, dt * 5);
   p.vx = p.vx * (1 - blend) + targetVx * blend;
   p.vy = p.vy * (1 - blend) + targetVy * blend;
 
@@ -812,7 +834,7 @@ function step(dt){
     const dd = Math.sqrt(d2) + 1e-3;
     const minD = b.r * 1.2;
     const effD2 = Math.max(d2, minD * minD);
-    const force = b.mass / effD2 * Math.max(0, 1 - p.gravResist);
+    const force = b.mass / effD2 * 2.5 * Math.max(0, 1 - p.gravResist);
     p.vx += (dx / dd) * force * dt;
     p.vy += (dy / dd) * force * dt;
   }
