@@ -776,6 +776,59 @@ function render(){
     ctx.globalAlpha = 1;
   }
 
+  // Minimap
+  const ar = S.arena;
+  const mmW = 120, mmH = Math.round(mmW * ar.h / ar.w);
+  const mmX = 12, mmY = 62;
+  const mmScale = mmW / ar.w;
+
+  ctx.fillStyle = 'rgba(2,4,12,0.7)';
+  ctx.fillRect(mmX, mmY, mmW, mmH);
+  ctx.strokeStyle = 'rgba(80,120,220,0.3)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(mmX, mmY, mmW, mmH);
+
+  for(const b of S.bodies){
+    const bx = mmX + (b.x - ar.x) * mmScale;
+    const by = mmY + (b.y - ar.y) * mmScale;
+    const br = Math.max(2, b.r * mmScale);
+    if(b.isStar){
+      ctx.fillStyle = b.col;
+      ctx.globalAlpha = 0.25;
+      ctx.beginPath();
+      ctx.arc(bx, by, br * 2.5, 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.fillStyle = b.col;
+    ctx.globalAlpha = 0.85;
+    ctx.beginPath();
+    ctx.arc(bx, by, br, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = '#ff4466';
+  ctx.globalAlpha = 0.7;
+  for(const e of S.enemies){
+    const ex = mmX + (e.x - ar.x) * mmScale;
+    const ey = mmY + (e.y - ar.y) * mmScale;
+    ctx.fillRect(ex - 1, ey - 1, 2, 2);
+  }
+
+  const px = mmX + (pl.x - ar.x) * mmScale;
+  const py = mmY + (pl.y - ar.y) * mmScale;
+  ctx.fillStyle = '#ffffff';
+  ctx.globalAlpha = 1;
+  ctx.beginPath();
+  ctx.arc(px, py, 2.5, 0, Math.PI*2);
+  ctx.fill();
+
+  const vx = mmX + (S.cam.x - W/2 - ar.x) * mmScale;
+  const vy = mmY + (S.cam.y - H/2 - ar.y) * mmScale;
+  ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+  ctx.lineWidth = 0.5;
+  ctx.strokeRect(vx, vy, W * mmScale, H * mmScale);
+  ctx.globalAlpha = 1;
+
   // Floating joystick (screen space)
   if(joy.active){
     ctx.fillStyle = 'rgba(10,15,30,0.38)';
