@@ -18,7 +18,7 @@ function generateBodies(){
   const ar = S.arena;
   const room = S.room;
   const sec = S.sector.bodies || {min:1, max:3, starChance:0.15};
-  const count = Math.min(6, sec.min + Math.floor((room - 1) * (sec.max - sec.min) / 12));
+  const count = Math.min(10, sec.min + 1 + Math.floor((room - 1) * (sec.max - sec.min) / 8));
   const placed = [];
 
   for(let i = 0; i < count; i++){
@@ -28,14 +28,14 @@ function generateBodies(){
     const rVar = tmpl.r * rand(0.85, 1.15);
     let bx, by, ok = false;
 
-    for(let attempt = 0; attempt < 40; attempt++){
-      bx = rand(ar.x + rVar + 50, ar.x + ar.w - rVar - 50);
-      by = rand(ar.y + rVar + 50, ar.y + ar.h - rVar - 50);
-      if(bx*bx + by*by < 200*200) continue;
+    for(let attempt = 0; attempt < 60; attempt++){
+      bx = rand(ar.x + rVar + 80, ar.x + ar.w - rVar - 80);
+      by = rand(ar.y + rVar + 80, ar.y + ar.h - rVar - 80);
+      if(bx*bx + by*by < 300*300) continue;
       ok = true;
       for(const pb of placed){
         const dd = Math.hypot(bx - pb.x, by - pb.y);
-        if(dd < rVar + pb.r + 90){ ok = false; break; }
+        if(dd < rVar + pb.r + 220){ ok = false; break; }
       }
       if(ok) break;
     }
@@ -58,10 +58,10 @@ function generateBodies(){
 // ---------- Starfield ----------
 function generateStarfield(){
   S.bgStars = [];
-  for(let i = 0; i < 220; i++){
+  for(let i = 0; i < 400; i++){
     S.bgStars.push({
-      x: rand(-2200, 2200),
-      y: rand(-2200, 2200),
+      x: rand(-5000, 5000),
+      y: rand(-5000, 5000),
       sz: rand(0.5, 1.8),
       bright: rand(0.25, 1.0),
       twinkleSpd: rand(1, 4.5),
@@ -71,27 +71,27 @@ function generateStarfield(){
 
 // ---------- Rooms ----------
 function placeAtArenaEdge(e){
-  const a = S.arena;
   const p = S.player;
-  const m = e.r + 12;
-  let bx = 0, by = 0, bd = -1;
-  for(let k = 0; k < 8; k++){
-    const edge = (Math.random()*4)|0;
-    let tx, ty;
-    if(edge===0)     { tx=rand(a.x+m, a.x+a.w-m); ty=a.y+m; }
-    else if(edge===1){ tx=a.x+a.w-m; ty=rand(a.y+m, a.y+a.h-m); }
-    else if(edge===2){ tx=rand(a.x+m, a.x+a.w-m); ty=a.y+a.h-m; }
-    else             { tx=a.x+m; ty=rand(a.y+m, a.y+a.h-m); }
-    // Avoid spawning inside planets
+  const a = S.arena;
+  const spawnDist = Math.max(W, H) * 0.6 + 80;
+  for(let k = 0; k < 20; k++){
+    const ang = Math.random() * Math.PI * 2;
+    const dist = spawnDist + Math.random() * 200;
+    const tx = p.x + Math.cos(ang) * dist;
+    const ty = p.y + Math.sin(ang) * dist;
+    if(tx < a.x + e.r || tx > a.x + a.w - e.r) continue;
+    if(ty < a.y + e.r || ty > a.y + a.h - e.r) continue;
     let insideBody = false;
     for(const b of S.bodies){
-      if(Math.hypot(tx-b.x, ty-b.y) < b.r + e.r + 20){ insideBody = true; break; }
+      if(Math.hypot(tx-b.x, ty-b.y) < b.r + e.r + 30){ insideBody = true; break; }
     }
     if(insideBody) continue;
-    const dd = (tx-p.x)*(tx-p.x)+(ty-p.y)*(ty-p.y);
-    if(dd > bd){ bd=dd; bx=tx; by=ty; }
+    e.x = tx; e.y = ty;
+    return;
   }
-  e.x = bx; e.y = by;
+  const ang = Math.random() * Math.PI * 2;
+  e.x = clamp(p.x + Math.cos(ang) * spawnDist, a.x + e.r, a.x + a.w - e.r);
+  e.y = clamp(p.y + Math.sin(ang) * spawnDist, a.y + e.r, a.y + a.h - e.r);
 }
 
 function forceFireAll(){
@@ -302,8 +302,8 @@ function startRun(){
   S.parts = [];
   S.pops = [];
   S.bodies = [];
-  const aw = Math.min(1400, Math.max(780, W * 1.4));
-  const ah = Math.min(1100, Math.max(680, H * 0.95));
+  const aw = 4000;
+  const ah = 3000;
   S.arena = {x: -aw/2, y: -ah/2, w: aw, h: ah};
   S.cam.x = 0; S.cam.y = 0;
   S.t = 0;
@@ -464,14 +464,6 @@ function render(){
 
   ctx.save();
   ctx.translate(W/2 - S.cam.x + shx, H/2 - S.cam.y + shy);
-
-  // Arena border
-  const ar = S.arena;
-  ctx.strokeStyle = 'rgba(80,120,220,0.2)';
-  ctx.lineWidth = 2;
-  ctx.setLineDash([16, 12]);
-  ctx.strokeRect(ar.x, ar.y, ar.w, ar.h);
-  ctx.setLineDash([]);
 
   // Gravity bodies
   for(const b of S.bodies){

@@ -537,17 +537,24 @@ function updateEnemies(dt){
       }
     }
 
-    // Planet avoidance - steer around gravity bodies
+    // Planet avoidance - smart steering around gravity bodies
     let avoidX = 0, avoidY = 0;
     if(!(e.boss && e.bossPhase === 'charging')){
       for(const b of S.bodies){
         const bdx = e.x - b.x, bdy = e.y - b.y;
         const bd = Math.hypot(bdx, bdy) + 1e-3;
-        const safeR = b.r + e.r + 65;
+        const safeR = b.r + e.r + 140;
         if(bd < safeR){
-          const strength = (1 - bd / safeR) * moveSpd * 6;
-          avoidX += (bdx / bd) * strength;
-          avoidY += (bdy / bd) * strength;
+          const proximity = 1 - bd / safeR;
+          const gravForce = b.mass / (bd * bd);
+          const steerStr = proximity * moveSpd * 8;
+          const pushForce = gravForce + steerStr;
+          avoidX += (bdx / bd) * pushForce;
+          avoidY += (bdy / bd) * pushForce;
+          const cross = bdx * my - bdy * mx;
+          const perpDir = cross > 0 ? 1 : -1;
+          avoidX += (-bdy / bd) * perpDir * steerStr * 0.6;
+          avoidY += (bdx / bd) * perpDir * steerStr * 0.6;
         }
       }
     }
