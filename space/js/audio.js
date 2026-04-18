@@ -124,4 +124,9 @@ const sfx = {
     playNoise(0.18, 0.45);
     playTone(80, 0.2, 'square', 0.25, 30);
   },
+  warp(){
+    playTone(100, 0.8, 'sawtooth', 0.2, 600);
+    playNoise(0.6, 0.25);
+    setTimeout(() => playTone(400, 0.4, 'sine', 0.25, 1000), 500);
+  },
 };

@@ -29,6 +29,7 @@ const S = {
   roomSpawnTimer: 0,
   roomKind: 'normal',
   roomClearT: 0,
+  warpT: 0,
   arena: {x:-600, y:-420, w:1200, h:840},
   shake: 0,
   flash: 0,

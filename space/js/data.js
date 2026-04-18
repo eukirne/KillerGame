@@ -171,8 +171,8 @@ const META = [
 
 // --- Gravity body templates ---
 const BODY_TYPES = {
-  planet_s: {r:28,  mass:3200,   col:'#3a7fbf', glow:'#2a5f8f', crashR:22,  crashDmg:15, label:'S Planet'},
-  planet_m: {r:42,  mass:6000,   col:'#5f4fbf', glow:'#3f2f8f', crashR:36,  crashDmg:25, label:'M Planet'},
-  planet_l: {r:60,  mass:10000,  col:'#bf5f3a', glow:'#8f3f2a', crashR:52,  crashDmg:40, label:'L Planet'},
-  star:     {r:48,  mass:18000,  col:'#ffe066', glow:'#ffaa22', crashR:55,  crashDmg:60, label:'Star', isStar:true},
+  planet_s: {r:28,  mass:800000,  col:'#3a7fbf', glow:'#2a5f8f', crashR:22,  crashDmg:15, label:'S Planet'},
+  planet_m: {r:42,  mass:1600000, col:'#5f4fbf', glow:'#3f2f8f', crashR:36,  crashDmg:25, label:'M Planet'},
+  planet_l: {r:60,  mass:2800000, col:'#bf5f3a', glow:'#8f3f2a', crashR:52,  crashDmg:40, label:'L Planet'},
+  star:     {r:48,  mass:5000000, col:'#ffe066', glow:'#ffaa22', crashR:55,  crashDmg:60, label:'Star', isStar:true},
 };

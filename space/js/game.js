@@ -110,11 +110,11 @@ function forceFireAll(){
   if(fired) sfx.tap();
 }
 
-function startRoom(){
+function startRoom(skipBodies){
   const n = S.room;
   S.roomState = 'fighting';
   S.roomSpawnTimer = 0.25;
-  generateBodies();
+  if(!skipBodies) generateBodies();
   if(n % 5 === 0){
     S.roomKind = 'boss';
     S.roomSpawnLeft = 1;
@@ -163,16 +163,29 @@ function updateSpawner(dt){
       S.roomClearT = 1.4;
       const healAmt = 5 + Math.floor(S.room * 0.25);
       p.hp = Math.min(p.maxHp, p.hp + healAmt);
-      popup('SECTOR ' + S.room + ' CLEAR', p.x, p.y - 40, '#ffcf66');
+      popup('SYSTEM ' + S.room + ' CLEAR', p.x, p.y - 40, '#ffcf66');
       sfx.roomClear();
       gainXp(3 + S.room * 0.4);
     }
   } else if(S.roomState === 'cleared'){
     S.roomClearT -= dt;
     if(S.roomClearT <= 0){
+      S.roomState = 'warping';
+      S.warpT = 1.5;
+      S.bodies = [];
+      S.pickups = [];
+      S.projectiles = [];
+      sfx.warp();
+    }
+  } else if(S.roomState === 'warping'){
+    S.warpT -= dt;
+    if(S.warpT <= 0.75 && S.bodies.length === 0){
       S.room++;
       if(S.room > (meta.maxRoom || 0)) meta.maxRoom = S.room;
-      startRoom();
+      generateBodies();
+    }
+    if(S.warpT <= 0){
+      startRoom(true);
     }
   }
 }
@@ -334,7 +347,7 @@ function gameOver(){
   let rank = -1;
   if(pName) rank = submitScore(pName, S.room, S.kills, S.lvl, S.t);
   let summary =
-    `SECTOR: <b>${S.room}</b><br>` +
+    `SYSTEM: <b>${S.room}</b><br>` +
     `TIME: <b>${fmtTime(S.t)}</b><br>` +
     `LEVEL: <b>${S.lvl}</b><br>` +
     `KILLS: <b>${S.kills}</b><br>` +
@@ -419,7 +432,7 @@ function updateHud(){
   const p = S.player;
   hpFill.style.width = clamp(p.hp / p.maxHp * 100, 0, 100) + '%';
   xpFill.style.width = clamp(S.xp / S.xpNext * 100, 0, 100) + '%';
-  timeEl.textContent  = 'S ' + S.room;
+  timeEl.textContent  = 'SYS ' + S.room;
   killsEl.textContent = 'x ' + S.kills;
   goldEl.textContent  = '+ ' + S.runGold;
   lvlEl.textContent   = 'Lv ' + S.lvl;
@@ -699,6 +712,44 @@ function render(){
 
   ctx.restore();
 
+  if(S.roomState === 'warping' && S.warpT > 0){
+    const warpTotal = 1.5;
+    const prog = 1 - S.warpT / warpTotal;
+    const intensity = prog < 0.5 ? prog * 2 : (1 - prog) * 2;
+    const cx = W/2, cy = H/2;
+    for(const st of S.bgStars){
+      let sx = ((st.x * 0.4 + 2200) % (W + 40)) - 20;
+      let sy = ((st.y * 0.4 + 2200) % (H + 40)) - 20;
+      const sdx = sx - cx, sdy = sy - cy;
+      const sd = Math.hypot(sdx, sdy) + 1;
+      const snx = sdx / sd, sny = sdy / sd;
+      const len = intensity * 220 * Math.min(1.5, sd / 80);
+      ctx.strokeStyle = `rgba(140,200,255,${(0.15 + intensity * 0.5) * st.bright})`;
+      ctx.lineWidth = st.sz * (1 + intensity * 2);
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(sx + snx * len, sy + sny * len);
+      ctx.stroke();
+    }
+    ctx.fillStyle = `rgba(10,20,80,${intensity * 0.12})`;
+    ctx.fillRect(0, 0, W, H);
+    if(prog > 0.43 && prog < 0.57){
+      const flash = 1 - Math.abs(prog - 0.5) / 0.07;
+      if(flash > 0){
+        ctx.globalAlpha = flash * 0.8;
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, W, H);
+        ctx.globalAlpha = 1;
+      }
+    }
+    ctx.fillStyle = '#7ad6ff';
+    ctx.font = '900 22px system-ui';
+    ctx.textAlign = 'center';
+    ctx.globalAlpha = intensity;
+    ctx.fillText(prog < 0.5 ? 'WARPING...' : 'SYSTEM ' + S.room, cx, cy - 50);
+    ctx.globalAlpha = 1;
+  }
+
   // Floating joystick (screen space)
   if(joy.active){
     ctx.fillStyle = 'rgba(10,15,30,0.38)';
@@ -750,7 +801,7 @@ function step(dt){
     targetVy = joy.dy * joy.mag * speed;
   }
 
-  const blend = Math.min(1, dt * 12);
+  const blend = Math.min(1, dt * 7);
   p.vx = p.vx * (1 - blend) + targetVx * blend;
   p.vy = p.vy * (1 - blend) + targetVy * blend;
 
@@ -764,6 +815,11 @@ function step(dt){
     const force = b.mass / effD2 * Math.max(0, 1 - p.gravResist);
     p.vx += (dx / dd) * force * dt;
     p.vy += (dy / dd) * force * dt;
+  }
+
+  if(S.roomState === 'warping'){
+    p.vx += -p.x * 4 * dt;
+    p.vy += -p.y * 4 * dt;
   }
 
   const maxV = speed * 1.5;

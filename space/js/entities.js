@@ -124,6 +124,24 @@ function checkCrashBurn(p){
   }
 }
 
+function checkCrashBurnEnemy(e){
+  if(e.crashCD > 0) return;
+  for(const b of S.bodies){
+    const dx = e.x - b.x, dy = e.y - b.y;
+    const dist = Math.hypot(dx, dy);
+    if(dist < b.crashR + e.r){
+      const dmg = b.crashDmg;
+      e.hp -= dmg;
+      e.crashCD = 0.4;
+      e.hitFlash = 1;
+      popup('-' + dmg, e.x, e.y - e.r - 2, b.isStar ? '#ffcc44' : '#ff8844');
+      burst(e.x, e.y, b.isStar ? '#ffcc44' : '#ff8844', 4);
+      throttledSfx('crash', 0.12);
+      return;
+    }
+  }
+}
+
 // ---------- Damage dealing ----------
 function damage(e, amt){
   if(e.hp <= 0) return;
@@ -421,6 +439,7 @@ function spawnEnemy(type){
     kx: 0, ky: 0,
     hitFlash: 0,
     shootT: base.ranged ? 1.2 + Math.random()*1.4 : 0,
+    crashCD: 0,
   };
   e.hpMax = e.hp;
   S.enemies.push(e);
@@ -471,6 +490,7 @@ function updateEnemies(dt){
   for(let i=S.enemies.length-1;i>=0;i--){
     const e = S.enemies[i];
     e.hitFlash = Math.max(0, e.hitFlash - dt * 4);
+    e.crashCD = Math.max(0, (e.crashCD || 0) - dt);
 
     let dx = p.x - e.x, dy = p.y - e.y;
     const d = Math.hypot(dx, dy) + 1e-3;
@@ -525,13 +545,13 @@ function updateEnemies(dt){
     applyGravity(e, dt);
 
     // Clamp enemy speed
-    const maxESpd = moveSpd * 1.3;
+    const maxESpd = moveSpd * 1.8;
     const evm = Math.hypot(e.vx, e.vy);
     if(evm > maxESpd){ e.vx *= maxESpd / evm; e.vy *= maxESpd / evm; }
 
     // Drag
-    e.vx *= 0.94;
-    e.vy *= 0.94;
+    e.vx *= 0.96;
+    e.vy *= 0.96;
 
     e.x += e.vx * dt + e.kx * dt;
     e.y += e.vy * dt + e.ky * dt;
@@ -539,6 +559,7 @@ function updateEnemies(dt){
 
     // Resolve planet collisions
     resolveBodyCollision(e);
+    checkCrashBurnEnemy(e);
 
     // Clamp to arena bounds
     e.x = clamp(e.x, ar.x + e.r, ar.x + ar.w - e.r);
