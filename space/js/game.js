@@ -679,7 +679,8 @@ function render(){
   const pl = S.player;
   if(pl.invuln > 0 && ((S.t * 18) | 0) % 2 === 0) ctx.globalAlpha = 0.45;
   const moveVel = Math.hypot(pl.vx, pl.vy);
-  const shipA = moveVel > pl.baseSpd * 0.15 ? Math.atan2(pl.vy, pl.vx) : Math.atan2(pl.aim.y, pl.aim.x);
+  if(moveVel > 5) pl.headingA = Math.atan2(pl.vy, pl.vx);
+  const shipA = pl.headingA || 0;
   ctx.save();
   ctx.translate(pl.x, pl.y);
   ctx.rotate(shipA);
@@ -701,15 +702,26 @@ function render(){
     ctx.closePath();
     ctx.fill();
     ctx.globalAlpha = 1;
-  } else {
-    ctx.fillStyle = '#ffcf66';
-    ctx.globalAlpha = 0.7 + 0.3 * Math.sin(S.t * 12);
-    ctx.beginPath();
-    ctx.arc(pl.r * 1.1, 0, 3, 0, Math.PI*2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
   }
   ctx.restore();
+  ctx.globalAlpha = 1;
+
+  // Aim reticle
+  const aimA = Math.atan2(pl.aim.y, pl.aim.x);
+  ctx.strokeStyle = '#ffcf66';
+  ctx.globalAlpha = 0.45;
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([5, 5]);
+  ctx.beginPath();
+  ctx.moveTo(pl.x + Math.cos(aimA) * (pl.r + 8), pl.y + Math.sin(aimA) * (pl.r + 8));
+  ctx.lineTo(pl.x + Math.cos(aimA) * (pl.r + 32), pl.y + Math.sin(aimA) * (pl.r + 32));
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#ffcf66';
+  ctx.globalAlpha = 0.6;
+  ctx.beginPath();
+  ctx.arc(pl.x + Math.cos(aimA) * (pl.r + 35), pl.y + Math.sin(aimA) * (pl.r + 35), 3, 0, Math.PI*2);
+  ctx.fill();
   ctx.globalAlpha = 1;
 
   // Particles
