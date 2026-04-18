@@ -18,7 +18,7 @@ function generateBodies(){
   const ar = S.arena;
   const room = S.room;
   const sec = S.sector.bodies || {min:1, max:3, starChance:0.15};
-  const count = Math.min(10, sec.min + 1 + Math.floor((room - 1) * (sec.max - sec.min) / 8));
+  const count = Math.min(12, sec.min + 3 + Math.floor((room - 1) * (sec.max - sec.min + 1) / 5));
   const placed = [];
 
   for(let i = 0; i < count; i++){
@@ -31,11 +31,11 @@ function generateBodies(){
     for(let attempt = 0; attempt < 60; attempt++){
       bx = rand(ar.x + rVar + 80, ar.x + ar.w - rVar - 80);
       by = rand(ar.y + rVar + 80, ar.y + ar.h - rVar - 80);
-      if(bx*bx + by*by < 300*300) continue;
+      if(bx*bx + by*by < 200*200) continue;
       ok = true;
       for(const pb of placed){
         const dd = Math.hypot(bx - pb.x, by - pb.y);
-        if(dd < rVar + pb.r + 220){ ok = false; break; }
+        if(dd < rVar + pb.r + 160){ ok = false; break; }
       }
       if(ok) break;
     }
@@ -58,10 +58,10 @@ function generateBodies(){
 // ---------- Starfield ----------
 function generateStarfield(){
   S.bgStars = [];
-  for(let i = 0; i < 400; i++){
+  for(let i = 0; i < 600; i++){
     S.bgStars.push({
-      x: rand(-5000, 5000),
-      y: rand(-5000, 5000),
+      x: rand(-4000, 4000),
+      y: rand(-4000, 4000),
       sz: rand(0.5, 1.8),
       bright: rand(0.25, 1.0),
       twinkleSpd: rand(1, 4.5),
@@ -302,8 +302,8 @@ function startRun(){
   S.parts = [];
   S.pops = [];
   S.bodies = [];
-  const aw = 4000;
-  const ah = 3000;
+  const aw = 2800;
+  const ah = 2200;
   S.arena = {x: -aw/2, y: -ah/2, w: aw, h: ah};
   S.cam.x = 0; S.cam.y = 0;
   S.t = 0;
