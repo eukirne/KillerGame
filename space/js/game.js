@@ -58,25 +58,55 @@ function generateBodies(){
 // ---------- Starfield ----------
 function generateStarfield(){
   S.bgStars = [];
-  for(let i = 0; i < 300; i++){
+  S.nebulae = [];
+  const SC = ['#fff','#fff','#fff','#aaccff','#ffddaa','#ffc8a0','#ccddff','#ffe8cc','#ff9988','#88aaff'];
+  for(let i = 0; i < 600; i++){
     S.bgStars.push({
-      x: rand(-6000, 6000), y: rand(-6000, 6000),
-      sz: rand(0.3, 0.8), bright: rand(0.1, 0.35),
-      twinkleSpd: rand(0.5, 2), depth: 0.05,
+      x: rand(-8000, 8000), y: rand(-8000, 8000),
+      sz: rand(0.3, 0.7), bright: rand(0.06, 0.22),
+      twinkleSpd: rand(0.3, 1.5), depth: rand(0.02, 0.06),
+      col: SC[(Math.random()*SC.length)|0],
     });
   }
-  for(let i = 0; i < 400; i++){
+  for(let i = 0; i < 500; i++){
     S.bgStars.push({
+      x: rand(-5000, 5000), y: rand(-5000, 5000),
+      sz: rand(0.5, 1.6), bright: rand(0.15, 0.55),
+      twinkleSpd: rand(0.5, 3), depth: rand(0.1, 0.22),
+      col: SC[(Math.random()*SC.length)|0],
+    });
+  }
+  for(let i = 0; i < 180; i++){
+    S.bgStars.push({
+      x: rand(-3500, 3500), y: rand(-3500, 3500),
+      sz: rand(1.0, 2.8), bright: rand(0.4, 1.0),
+      twinkleSpd: rand(1.5, 5), depth: rand(0.3, 0.5),
+      col: SC[(Math.random()*SC.length)|0],
+    });
+  }
+  const clN = 6 + Math.floor(Math.random() * 5);
+  for(let c = 0; c < clN; c++){
+    const cx = rand(-4000, 4000), cy = rand(-4000, 4000);
+    const cc = SC[(Math.random()*SC.length)|0];
+    const sn = 10 + Math.floor(Math.random() * 12);
+    const sp = 40 + Math.random() * 80;
+    const dp = rand(0.08, 0.35);
+    for(let i = 0; i < sn; i++){
+      S.bgStars.push({
+        x: cx + (Math.random()-0.5)*sp*2, y: cy + (Math.random()-0.5)*sp*2,
+        sz: rand(0.4, 2.2), bright: rand(0.25, 0.85),
+        twinkleSpd: rand(1, 4), depth: dp + rand(-0.03, 0.03),
+        col: Math.random() < 0.6 ? cc : '#fff',
+      });
+    }
+  }
+  const NC = ['rgba(60,80,180,0.04)','rgba(180,60,120,0.03)','rgba(60,180,140,0.03)','rgba(140,60,180,0.04)','rgba(180,120,60,0.03)','rgba(80,60,180,0.035)'];
+  const nebN = 4 + Math.floor(Math.random() * 3);
+  for(let i = 0; i < nebN; i++){
+    S.nebulae.push({
       x: rand(-4000, 4000), y: rand(-4000, 4000),
-      sz: rand(0.5, 1.8), bright: rand(0.25, 0.8),
-      twinkleSpd: rand(1, 4.5), depth: 0.2,
-    });
-  }
-  for(let i = 0; i < 120; i++){
-    S.bgStars.push({
-      x: rand(-3000, 3000), y: rand(-3000, 3000),
-      sz: rand(1.2, 2.8), bright: rand(0.5, 1.0),
-      twinkleSpd: rand(2, 6), depth: 0.45,
+      r: rand(200, 500), col: NC[(Math.random()*NC.length)|0],
+      depth: rand(0.04, 0.15),
     });
   }
 }
@@ -119,44 +149,76 @@ function forceFireAll(){
   if(fired) sfx.tap();
 }
 
+function generateObjective(){
+  const type = Math.random() < 0.6 ? 'beacon' : 'core';
+  let ox, oy;
+  if(S.bodies.length > 0){
+    const b = S.bodies[Math.floor(Math.random() * S.bodies.length)];
+    const angle = Math.random() * Math.PI * 2;
+    const dist = b.r + 80 + Math.random() * 120;
+    ox = b.x + Math.cos(angle) * dist;
+    oy = b.y + Math.sin(angle) * dist;
+  } else {
+    const ar = S.arena;
+    ox = rand(ar.x + 200, ar.x + ar.w - 200);
+    oy = rand(ar.y + 200, ar.y + ar.h - 200);
+  }
+  const room = S.room;
+  const hp = Math.round(200 + room * 50);
+  S.objective = {
+    type, x: ox, y: oy,
+    r: type === 'beacon' ? 22 : 16,
+    hp: type === 'beacon' ? hp : 0,
+    hpMax: type === 'beacon' ? hp : 0,
+    completed: false,
+  };
+  const gCount = 2 + Math.min(3, Math.floor(room / 3));
+  for(let i = 0; i < gCount; i++){
+    const t = pickWeighted(S.sector.pool, S.sector.weights);
+    const ge = spawnEnemy(t);
+    const ga = Math.random() * Math.PI * 2;
+    const gd = 60 + Math.random() * 100;
+    ge.x = ox + Math.cos(ga) * gd;
+    ge.y = oy + Math.sin(ga) * gd;
+    ge.hp = Math.round(ge.hp * 2);
+    ge.hpMax = ge.hp;
+    ge.spd = Math.round(ge.spd * 1.15);
+    ge.col = '#ff9944';
+    ge.guardian = true;
+  }
+  const label = type === 'beacon' ? 'DESTROY THE BEACON' : 'RETRIEVE THE CORE';
+  popup(label, S.player.x, S.player.y - 50, type === 'beacon' ? '#ffcf66' : '#7ad6ff');
+}
+
 function startRoom(skipBodies){
   const n = S.room;
   S.roomState = 'fighting';
-  S.roomSpawnTimer = 0.25;
+  S.roomSpawnTimer = 0.3;
   if(!skipBodies) generateBodies();
-  if(n % 5 === 0){
-    S.roomKind = 'boss';
-    S.roomSpawnLeft = 1;
-  } else {
-    S.roomKind = 'normal';
-    S.roomSpawnLeft = Math.min(55, 6 + Math.floor(n * 2.2));
-  }
+  S.roomKind = 'normal';
+  S.roomSpawnLeft = Math.min(80, 15 + Math.floor(n * 3));
+  generateObjective();
 }
 
 function updateSpawner(dt){
   const p = S.player;
   if(S.roomState === 'fighting'){
+    // Core pickup check
+    if(S.objective && S.objective.type === 'core' && !S.objective.completed){
+      const obj = S.objective;
+      const odx = p.x - obj.x, ody = p.y - obj.y;
+      if(odx*odx + ody*ody < (p.r + obj.r) * (p.r + obj.r)){
+        obj.completed = true;
+        popup('CORE RETRIEVED', obj.x, obj.y - 30, '#7ad6ff');
+        sfx.roomClear();
+        S.shake = 6;
+        burst(obj.x, obj.y, '#7ad6ff', 20);
+      }
+    }
     S.roomSpawnTimer -= dt;
     if(S.roomSpawnTimer <= 0 && S.roomSpawnLeft > 0){
-      if(S.roomKind === 'boss'){
-        const b = spawnEnemy('boss');
-        placeAtArenaEdge(b);
-        const scale = 1 + Math.max(0, S.room / 5 - 1) * 0.5;
-        b.hp = Math.round(b.hp * scale);
-        b.hpMax = b.hp;
-        const bossTypes = ['charger', 'spreader', 'summoner'];
-        b.bossType = bossTypes[((S.room / 5 | 0) - 1) % 3];
-        b.bossPhase = 'chase';
-        b.bossTimer = 1.8 + Math.random() * 0.5;
-        b.telegraphT = 0;
-        b.chargeX = 0; b.chargeY = 0;
-        b.enraged = false;
-        const names = {charger:'CHARGER', spreader:'SPREADER', summoner:'SUMMONER'};
-        popup(names[b.bossType] + ' BOSS', p.x, p.y - 60, '#ff4466');
-        S.shake = 12;
-        sfx.boss();
-        S.roomSpawnLeft = 0;
-      } else {
+      const maxOnScreen = 10 + Math.floor(S.room * 1.5);
+      if(S.enemies.length < maxOnScreen){
         const batch = Math.min(S.roomSpawnLeft, 2 + Math.floor(S.room / 3));
         for(let i = 0; i < batch; i++){
           const t = pickWeighted(S.sector.pool, S.sector.weights);
@@ -164,10 +226,13 @@ function updateSpawner(dt){
           placeAtArenaEdge(e);
         }
         S.roomSpawnLeft -= batch;
-        S.roomSpawnTimer = Math.max(0.18, 0.7 - S.room * 0.025);
       }
+      S.roomSpawnTimer = Math.max(0.25, 0.9 - S.room * 0.03);
     }
-    if(S.roomSpawnLeft <= 0 && S.enemies.length === 0){
+    if(S.roomSpawnLeft <= 0 && S.objective && !S.objective.completed){
+      S.roomSpawnLeft = Math.min(25, 4 + Math.floor(S.room * 1.2));
+    }
+    if(S.objective && S.objective.completed && S.roomSpawnLeft <= 0 && S.enemies.length === 0){
       S.roomState = 'cleared';
       S.roomClearT = 1.4;
       const healAmt = 5 + Math.floor(S.room * 0.25);
@@ -175,6 +240,9 @@ function updateSpawner(dt){
       popup('SYSTEM ' + S.room + ' CLEAR', p.x, p.y - 40, '#ffcf66');
       sfx.roomClear();
       gainXp(3 + S.room * 0.4);
+    }
+    if(S.objective && S.objective.completed && S.roomSpawnLeft > 0){
+      S.roomSpawnLeft = 0;
     }
   } else if(S.roomState === 'cleared'){
     S.roomClearT -= dt;
@@ -311,6 +379,8 @@ function startRun(){
   S.parts = [];
   S.pops = [];
   S.bodies = [];
+  S.objective = null;
+  S.nebulae = [];
   const aw = 2800;
   const ah = 2200;
   S.arena = {x: -aw/2, y: -ah/2, w: aw, h: ah};
@@ -456,6 +526,22 @@ function render(){
   if(S.mode !== 'playing' && S.mode !== 'gameover') return;
   if(!S.player) return;
 
+  // Nebulae (deepest layer)
+  if(S.nebulae){
+    for(const n of S.nebulae){
+      const nx = n.x - S.cam.x * n.depth + W/2;
+      const ny = n.y - S.cam.y * n.depth + H/2;
+      if(nx < -n.r*2 || nx > W+n.r*2 || ny < -n.r*2 || ny > H+n.r*2) continue;
+      const grad = ctx.createRadialGradient(nx, ny, 0, nx, ny, n.r);
+      grad.addColorStop(0, n.col);
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(nx, ny, n.r, 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+
   // Parallax starfield (screen space, slow scroll)
   for(const st of S.bgStars){
     const sx = st.x - S.cam.x * st.depth + W/2;
@@ -463,8 +549,14 @@ function render(){
     if(sx < -4 || sx > W+4 || sy < -4 || sy > H+4) continue;
     const twinkle = 0.55 + 0.45 * Math.sin(S.t * st.twinkleSpd + st.x);
     ctx.globalAlpha = st.bright * twinkle;
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(sx, sy, st.sz, st.sz);
+    ctx.fillStyle = st.col || '#fff';
+    if(st.sz > 1.8){
+      ctx.beginPath();
+      ctx.arc(sx, sy, st.sz * 0.5, 0, Math.PI*2);
+      ctx.fill();
+    } else {
+      ctx.fillRect(sx, sy, st.sz, st.sz);
+    }
   }
   ctx.globalAlpha = 1;
 
@@ -531,49 +623,12 @@ function render(){
 
   // Enemies
   for(const e of S.enemies){
-    if(e.boss && e.bossPhase === 'telegraph'){
-      const prog = (e.telegraphT || 0) / 0.65;
-      if(e.bossType === 'charger'){
-        ctx.strokeStyle = '#ff4466';
-        ctx.lineWidth = 3;
-        ctx.globalAlpha = 0.3 + 0.4 * Math.sin(prog * Math.PI * 6);
-        ctx.setLineDash([12, 8]);
-        ctx.beginPath();
-        ctx.moveTo(e.x, e.y);
-        ctx.lineTo(e.chargeX, e.chargeY);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.globalAlpha = 1;
-      } else if(e.bossType === 'spreader'){
-        ctx.strokeStyle = '#ff4466';
-        ctx.lineWidth = 2;
-        ctx.globalAlpha = 0.2 + 0.3 * Math.sin(prog * Math.PI * 8);
-        ctx.beginPath();
-        ctx.arc(e.x, e.y, 30 + prog * 140, 0, Math.PI*2);
-        ctx.stroke();
-        ctx.globalAlpha = 1;
-      } else if(e.bossType === 'summoner'){
-        ctx.strokeStyle = '#b85cff';
-        ctx.lineWidth = 3;
-        ctx.globalAlpha = 0.3 + 0.4 * Math.sin(prog * Math.PI * 6);
-        ctx.beginPath();
-        ctx.arc(e.x, e.y, e.r + 10 + prog * 25, 0, Math.PI*2);
-        ctx.stroke();
-        ctx.globalAlpha = 1;
-      }
-    }
-    if(e.boss && e.bossPhase === 'charging'){
-      ctx.fillStyle = 'rgba(255,68,102,0.25)';
-      ctx.beginPath();
-      ctx.arc(e.x, e.y, e.r + 10, 0, Math.PI*2);
-      ctx.fill();
-    }
-    if(e.boss && e.enraged){
-      ctx.strokeStyle = '#ff4466';
+    if(e.guardian){
+      ctx.strokeStyle = '#ff9944';
       ctx.lineWidth = 2;
-      ctx.globalAlpha = 0.5 + 0.3 * Math.sin(S.t * 8);
+      ctx.globalAlpha = 0.3 + 0.2 * Math.sin(S.t * 5 + e.id);
       ctx.beginPath();
-      ctx.arc(e.x, e.y, e.r + 4, 0, Math.PI*2);
+      ctx.arc(e.x, e.y, e.r + 6, 0, Math.PI*2);
       ctx.stroke();
       ctx.globalAlpha = 1;
     }
@@ -583,19 +638,10 @@ function render(){
     ctx.rotate(evA);
     ctx.fillStyle = e.hitFlash > 0 ? '#fff' : e.col;
     ctx.beginPath();
-    if(e.boss){
-      ctx.moveTo(e.r, 0);
-      ctx.lineTo(-e.r * 0.5, -e.r * 0.75);
-      ctx.lineTo(-e.r * 0.2, -e.r * 0.25);
-      ctx.lineTo(-e.r * 0.4, 0);
-      ctx.lineTo(-e.r * 0.2, e.r * 0.25);
-      ctx.lineTo(-e.r * 0.5, e.r * 0.75);
-    } else {
-      ctx.moveTo(e.r, 0);
-      ctx.lineTo(-e.r * 0.7, -e.r * 0.6);
-      ctx.lineTo(-e.r * 0.35, 0);
-      ctx.lineTo(-e.r * 0.7, e.r * 0.6);
-    }
+    ctx.moveTo(e.r, 0);
+    ctx.lineTo(-e.r * 0.7, -e.r * 0.6);
+    ctx.lineTo(-e.r * 0.35, 0);
+    ctx.lineTo(-e.r * 0.7, e.r * 0.6);
     ctx.closePath();
     ctx.fill();
     const eSpd = Math.hypot(e.vx||0, e.vy||0);
@@ -611,12 +657,6 @@ function render(){
       ctx.globalAlpha = 1;
     }
     ctx.restore();
-    if(e.boss){
-      ctx.fillStyle = '#000';
-      ctx.fillRect(e.x - e.r, e.y - e.r - 10, e.r * 2, 5);
-      ctx.fillStyle = '#ff6680';
-      ctx.fillRect(e.x - e.r, e.y - e.r - 10, (e.r * 2) * (e.hp / e.hpMax), 5);
-    }
   }
 
   // Projectiles
@@ -725,6 +765,65 @@ function render(){
   ctx.fill();
   ctx.globalAlpha = 1;
 
+  // Objective (world space)
+  if(S.objective && !S.objective.completed){
+    const obj = S.objective;
+    const pulse = 0.6 + 0.4 * Math.sin(S.t * 3);
+    if(obj.type === 'beacon'){
+      ctx.fillStyle = `rgba(255,207,102,${0.08 * pulse})`;
+      ctx.beginPath();
+      ctx.arc(obj.x, obj.y, obj.r * 3, 0, Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle = '#ffcf66';
+      ctx.globalAlpha = 0.7 + 0.3 * pulse;
+      ctx.beginPath();
+      for(let hi = 0; hi < 6; hi++){
+        const ha = (hi / 6) * Math.PI * 2 + S.t * 0.5;
+        const hx = obj.x + Math.cos(ha) * obj.r;
+        const hy = obj.y + Math.sin(ha) * obj.r;
+        if(hi === 0) ctx.moveTo(hx, hy); else ctx.lineTo(hx, hy);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#000';
+      ctx.fillRect(obj.x - 22, obj.y - obj.r - 14, 44, 5);
+      ctx.fillStyle = '#ffcf66';
+      ctx.fillRect(obj.x - 22, obj.y - obj.r - 14, 44 * Math.max(0, obj.hp / obj.hpMax), 5);
+      ctx.fillStyle = '#ffcf66';
+      ctx.font = '700 10px ui-monospace,Menlo,Consolas,monospace';
+      ctx.textAlign = 'center';
+      ctx.globalAlpha = 0.8;
+      ctx.fillText('BEACON', obj.x, obj.y - obj.r - 20);
+      ctx.globalAlpha = 1;
+    } else {
+      ctx.fillStyle = `rgba(122,214,255,${0.1 * pulse})`;
+      ctx.beginPath();
+      ctx.arc(obj.x, obj.y, obj.r * 2.5, 0, Math.PI*2);
+      ctx.fill();
+      ctx.save();
+      ctx.translate(obj.x, obj.y);
+      ctx.rotate(S.t * 2);
+      ctx.fillStyle = '#7ad6ff';
+      ctx.globalAlpha = 0.8 + 0.2 * pulse;
+      ctx.beginPath();
+      ctx.moveTo(0, -obj.r);
+      ctx.lineTo(obj.r * 0.6, 0);
+      ctx.lineTo(0, obj.r);
+      ctx.lineTo(-obj.r * 0.6, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.restore();
+      ctx.fillStyle = '#7ad6ff';
+      ctx.font = '700 10px ui-monospace,Menlo,Consolas,monospace';
+      ctx.textAlign = 'center';
+      ctx.globalAlpha = 0.8;
+      ctx.fillText('CORE', obj.x, obj.y - obj.r - 10);
+      ctx.globalAlpha = 1;
+    }
+  }
+
   // Particles
   for(const pt of S.parts){
     ctx.globalAlpha = Math.max(0, pt.life / pt.maxLife);
@@ -746,6 +845,41 @@ function render(){
   ctx.globalAlpha = 1;
 
   ctx.restore();
+
+  // Objective direction arrow (screen space)
+  if(S.objective && !S.objective.completed){
+    const obj = S.objective;
+    const osx = obj.x - S.cam.x + W/2;
+    const osy = obj.y - S.cam.y + H/2;
+    const margin = 50;
+    if(osx < margin || osx > W - margin || osy < margin || osy > H - margin){
+      const oAngle = Math.atan2(osy - H/2, osx - W/2);
+      const aDist = Math.min(W, H) * 0.42;
+      const ax = W/2 + Math.cos(oAngle) * aDist;
+      const ay = H/2 + Math.sin(oAngle) * aDist;
+      ctx.save();
+      ctx.translate(ax, ay);
+      ctx.rotate(oAngle);
+      ctx.fillStyle = obj.type === 'beacon' ? '#ffcf66' : '#7ad6ff';
+      ctx.globalAlpha = 0.7 + 0.3 * Math.sin(S.t * 4);
+      ctx.beginPath();
+      ctx.moveTo(14, 0);
+      ctx.lineTo(-8, -8);
+      ctx.lineTo(-4, 0);
+      ctx.lineTo(-8, 8);
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.restore();
+      const oDist = Math.round(Math.hypot(obj.x - S.player.x, obj.y - S.player.y));
+      ctx.fillStyle = obj.type === 'beacon' ? '#ffcf66' : '#7ad6ff';
+      ctx.font = '600 10px ui-monospace,Menlo,Consolas,monospace';
+      ctx.textAlign = 'center';
+      ctx.globalAlpha = 0.7;
+      ctx.fillText(oDist + 'm', ax, ay + 18);
+      ctx.globalAlpha = 1;
+    }
+  }
 
   if(S.roomState === 'warping' && S.warpT > 0){
     const warpTotal = 1.5;
@@ -821,6 +955,18 @@ function render(){
     const ex = mmX + (e.x - ar.x) * mmScale;
     const ey = mmY + (e.y - ar.y) * mmScale;
     ctx.fillRect(ex - 1, ey - 1, 2, 2);
+  }
+
+  if(S.objective && !S.objective.completed){
+    const obj = S.objective;
+    const ox = mmX + (obj.x - ar.x) * mmScale;
+    const oy = mmY + (obj.y - ar.y) * mmScale;
+    ctx.fillStyle = obj.type === 'beacon' ? '#ffcf66' : '#7ad6ff';
+    ctx.globalAlpha = 0.6 + 0.4 * Math.sin(S.t * 4);
+    ctx.beginPath();
+    ctx.arc(ox, oy, 3.5, 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
   }
 
   const px = mmX + (pl.x - ar.x) * mmScale;

@@ -180,6 +180,17 @@ function updateWeapons(dt){
             }
           }
         }
+        if(S.objective && S.objective.type === 'beacon' && !S.objective.completed){
+          const obj = S.objective;
+          const odx = obj.x - bx, ody = obj.y - by;
+          if(odx*odx + ody*ody < (obj.r + lvl.sz)*(obj.r + lvl.sz)){
+            const last = w.extra.hits[i]['obj'] || 0;
+            if(S.t - last > lvl.hit){
+              w.extra.hits[i]['obj'] = S.t;
+              hitObjective(lvl.dmg * p.dmgMul, bx, by);
+            }
+          }
+        }
       }
       continue;
     }
@@ -192,6 +203,11 @@ function updateWeapons(dt){
         for(const e of S.enemies){
           const dx = e.x - p.x, dy = e.y - p.y;
           if(dx*dx + dy*dy < r2) damage(e, lvl.dmg * p.dmgMul);
+        }
+        if(S.objective && S.objective.type === 'beacon' && !S.objective.completed){
+          const obj = S.objective;
+          const odx = obj.x - p.x, ody = obj.y - p.y;
+          if(odx*odx + ody*ody < r2) hitObjective(lvl.dmg * p.dmgMul, obj.x, obj.y);
         }
       }
       continue;
@@ -313,6 +329,16 @@ function updateProjectiles(dt){
             if(p.pr <= 0){ p.life = 0; break; }
           }
         }
+        if(p.life > 0 && S.objective && S.objective.type === 'beacon' && !S.objective.completed && !p.hits['obj']){
+          const obj = S.objective;
+          const odx = obj.x - p.x, ody = obj.y - p.y;
+          if(odx*odx + ody*ody < (obj.r + p.sz)*(obj.r + p.sz)){
+            p.hits['obj'] = 1;
+            hitObjective(p.dmg, p.x, p.y);
+            p.pr--;
+            if(p.pr <= 0) p.life = 0;
+          }
+        }
       }
     }
 
@@ -346,13 +372,23 @@ function updateProjectiles(dt){
       }
       if(absorbed){ p.life = 0; }
       else {
+        let missileHit = false;
         for(const e of S.enemies){
           const dx = e.x - p.x, dy = e.y - p.y;
           const rr = (e.r + p.sz);
           if(dx*dx + dy*dy < rr*rr){
             damage(e, p.dmg);
             p.life = 0;
+            missileHit = true;
             break;
+          }
+        }
+        if(!missileHit && S.objective && S.objective.type === 'beacon' && !S.objective.completed){
+          const obj = S.objective;
+          const odx = obj.x - p.x, ody = obj.y - p.y;
+          if(odx*odx + ody*ody < (obj.r + p.sz)*(obj.r + p.sz)){
+            hitObjective(p.dmg, p.x, p.y);
+            p.life = 0;
           }
         }
       }
@@ -371,6 +407,14 @@ function updateProjectiles(dt){
           const d = Math.sqrt(d2) + 1e-3;
           e.vx = (e.vx||0) + (dx/d) * 280;
           e.vy = (e.vy||0) + (dy/d) * 280;
+        }
+      }
+      if(S.objective && S.objective.type === 'beacon' && !S.objective.completed && !p.hits['obj']){
+        const obj = S.objective;
+        const odx = obj.x - p.x, ody = obj.y - p.y;
+        if(odx*odx + ody*ody < r2){
+          p.hits['obj'] = 1;
+          hitObjective(p.dmg, obj.x, obj.y);
         }
       }
     }
@@ -446,41 +490,18 @@ function spawnEnemy(type){
   return e;
 }
 
-// --- Boss attack execution ---
-function bossAttack(e, p){
-  const type = e.bossType;
-  if(type === 'charger'){
-    e.chargeX = p.x; e.chargeY = p.y;
-    e.bossPhase = 'charging';
-    e.bossTimer = 0.65;
-    sfx.boss();
-  } else if(type === 'spreader'){
-    const n = 10 + ((S.room / 5) | 0) * 2;
-    for(let k = 0; k < n; k++){
-      const a = (k / n) * Math.PI * 2;
-      S.projectiles.push({
-        type:'enemy', x:e.x, y:e.y,
-        vx:Math.cos(a)*210, vy:Math.sin(a)*210,
-        dmg:Math.round(e.dmg*0.5), life:2.4, sz:7, col:'#ff4466',
-        gravity:true
-      });
-    }
-    S.shake = Math.max(S.shake, 8);
-    sfx.explode();
-    e.bossPhase = 'recovering';
-    e.bossTimer = 1.4;
-  } else if(type === 'summoner'){
-    const count = 2 + Math.min(3, ((S.room / 10) | 0));
-    const pool = S.sector.pool;
-    for(let k = 0; k < count; k++){
-      const t = pool[(Math.random() * pool.length) | 0];
-      const ne = spawnEnemy(t);
-      ne.x = e.x + (Math.random()-0.5) * 80;
-      ne.y = e.y + (Math.random()-0.5) * 80;
-    }
-    sfx.boss();
-    e.bossPhase = 'recovering';
-    e.bossTimer = 2.2;
+function hitObjective(dmg, hx, hy){
+  const obj = S.objective;
+  if(!obj || obj.type !== 'beacon' || obj.completed) return;
+  obj.hp -= dmg;
+  burst(hx, hy, '#ffcf66', 4);
+  throttledSfx('hit', 0.06);
+  if(obj.hp <= 0){
+    obj.completed = true;
+    popup('BEACON DESTROYED', obj.x, obj.y - 30, '#ffcf66');
+    sfx.roomClear();
+    S.shake = 10;
+    burst(obj.x, obj.y, '#ffcf66', 25);
   }
 }
 
@@ -498,48 +519,9 @@ function updateEnemies(dt){
 
     let mx = dx, my = dy, moveSpd = e.spd;
 
-    // --- Boss AI ---
-    if(e.boss && e.bossType){
-      e.bossTimer -= dt;
-      if(e.bossPhase === 'chase'){
-        if(e.bossTimer <= 0){
-          e.bossPhase = 'telegraph';
-          e.bossTimer = 0.65;
-          e.telegraphT = 0;
-          e.chargeX = p.x; e.chargeY = p.y;
-        }
-      } else if(e.bossPhase === 'telegraph'){
-        e.telegraphT += dt;
-        moveSpd = 0;
-        if(e.bossTimer <= 0) bossAttack(e, p);
-      } else if(e.bossPhase === 'charging'){
-        const cdx = e.chargeX - e.x, cdy = e.chargeY - e.y;
-        const cd = Math.hypot(cdx, cdy) + 1e-3;
-        mx = cdx / cd; my = cdy / cd;
-        moveSpd = e.spd * 4.5;
-        if(cd < 40 || e.bossTimer <= 0){
-          e.bossPhase = 'chase';
-          e.bossTimer = 1.5 + Math.random() * 1.0;
-          S.shake = Math.max(S.shake, 7);
-        }
-      } else if(e.bossPhase === 'recovering'){
-        moveSpd = e.spd * 0.3;
-        if(e.bossTimer <= 0){
-          e.bossPhase = 'chase';
-          e.bossTimer = 1.5 + Math.random() * 1.0;
-        }
-      }
-      if(e.hp < e.hpMax * 0.4 && !e.enraged){
-        e.enraged = true;
-        e.spd = Math.round(e.spd * 1.35);
-        S.shake = Math.max(S.shake, 8);
-        popup('ENRAGED', e.x, e.y - e.r - 16, '#ff4466');
-      }
-    }
-
     // Planet avoidance - smart steering around gravity bodies
     let avoidX = 0, avoidY = 0;
-    if(!(e.boss && e.bossPhase === 'charging')){
+    {
       for(const b of S.bodies){
         const bdx = e.x - b.x, bdy = e.y - b.y;
         const bd = Math.hypot(bdx, bdy) + 1e-3;
@@ -602,9 +584,7 @@ function updateEnemies(dt){
     // Contact with player
     if(d < e.r + p.r){
       if(p.invuln <= 0){
-        let contactDmg = e.dmg;
-        if(e.boss && e.bossPhase === 'charging') contactDmg = Math.round(e.dmg * 2);
-        const dmgTaken = Math.max(1, Math.round(contactDmg - p.armor));
+        const dmgTaken = Math.max(1, Math.round(e.dmg - p.armor));
         p.hp -= dmgTaken;
         p.invuln = 0.6;
         S.shake = Math.max(S.shake, 5);
@@ -629,8 +609,7 @@ function updateEnemies(dt){
         vx:(Math.random()-0.5)*60, vy:(Math.random()-0.5)*60,
         type:'xp', val:e.xp
       });
-      burst(e.x, e.y, e.col, e.boss ? 40 : 8);
-      if(e.boss){ S.shake = Math.max(S.shake, 14); }
+      burst(e.x, e.y, e.col, 8);
       throttledSfx('kill', 0.04);
       S.enemies.splice(i, 1);
     }

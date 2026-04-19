@@ -38,6 +38,8 @@ const S = {
   pendingChoices: null,
   newSectorUnlocked: null,
   bgStars: [],
+  nebulae: [],
+  objective: null,
 };
 
 // ---------- Canvas ----------
