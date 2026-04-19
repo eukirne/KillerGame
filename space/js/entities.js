@@ -120,6 +120,23 @@ function checkCrashBurn(p){
       S.shake = Math.max(S.shake, b.isStar ? 8 : 4);
       burst(p.x, p.y, b.isStar ? '#ffcc44' : '#ff8844', 6);
       sfx.crash();
+      if(b.isStar && p.hp <= 0){
+        S.flash = 0.7;
+        S.shake = 22;
+        const cols = ['#ffcc44','#ff8822','#ff4400','#ffee88','#ff6600','#ff2200'];
+        for(let k = 0; k < 50; k++){
+          const a = Math.random() * Math.PI * 2;
+          const s = 80 + Math.random() * 320;
+          S.parts.push({
+            x: p.x, y: p.y,
+            vx: Math.cos(a)*s, vy: Math.sin(a)*s,
+            life: 0.6 + Math.random() * 0.8, maxLife: 1.4,
+            col: cols[(Math.random()*cols.length)|0],
+            sz: 3 + Math.random() * 5
+          });
+        }
+        sfx.explode();
+      }
     }
   }
 }
