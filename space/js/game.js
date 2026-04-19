@@ -364,7 +364,7 @@ function doReroll(){
 }
 
 // ---------- Start / end run ----------
-function startRun(){
+function startRun(startingRoom){
   initAudio();
   resumeAudio();
   S.mode = 'playing';
@@ -391,7 +391,7 @@ function startRun(){
   S.xp = 0;
   S.xpNext = 5;
   S.lvl = 1;
-  S.room = 1;
+  S.room = startingRoom || 1;
   S.shake = 0;
   S.flash = 0;
   S.rerollsLeft = metaBonus('rerolls') | 0;
@@ -434,7 +434,36 @@ function gameOver(){
   if(rank > 0) summary += `<br><br><span style="color:#7ad6ff"># ${rank} ON LEADERBOARD</span>`;
   if(S.newSectorUnlocked) summary += `<br><span style="color:#ffcf66">NEW SECTOR: ${S.newSectorUnlocked}</span>`;
   document.getElementById('summary').innerHTML = summary;
+  renderRestartPicker();
   show('gameover');
+}
+
+function renderRestartPicker(){
+  const div = document.getElementById('restartPicker');
+  const maxSys = S.room;
+  let html = '<p class="restart-label">RESTART FROM</p><div class="restart-grid">';
+  for(let i = 1; i <= maxSys; i++){
+    const cls = i === maxSys ? ' current' : '';
+    html += `<button class="restart-sys${cls}" data-act="startFrom" data-room="${i}">${i}</button>`;
+  }
+  html += '</div>';
+  div.innerHTML = html;
+}
+
+function renderMenuStartPicker(){
+  const div = document.getElementById('menuStartPicker');
+  const max = meta.maxRoom || 1;
+  if(max <= 1){
+    div.style.display = 'none';
+    return;
+  }
+  div.style.display = 'block';
+  let html = '<p class="restart-label">OR SKIP TO SYSTEM</p><div class="restart-grid">';
+  for(let i = 2; i <= max; i++){
+    html += `<button class="restart-sys" data-act="startFrom" data-room="${i}">${i}</button>`;
+  }
+  html += '</div>';
+  div.innerHTML = html;
 }
 
 function checkHeroUnlocks(){
@@ -1206,6 +1235,10 @@ document.body.addEventListener('click', (e) => {
   if(!b) return;
   const act = b.dataset.act;
   if(act === 'play') startRun();
+  else if(act === 'startFrom'){
+    const room = parseInt(b.dataset.room) || 1;
+    startRun(room);
+  }
   else if(act === 'meta'){ hideAll(); renderMeta(); show('metaScreen'); }
   else if(act === 'chars'){ hideAll(); renderChars(); show('charsScreen'); }
   else if(act === 'sectors'){ hideAll(); renderSectors(); show('sectorsScreen'); }
@@ -1214,7 +1247,7 @@ document.body.addEventListener('click', (e) => {
     if(!name) return;
     setPlayerName(name);
     document.getElementById('playerTag').textContent = name;
-    hideAll(); show('menu');
+    hideAll(); renderMenuStartPicker(); show('menu');
   }
   else if(act === 'changeName'){
     e.preventDefault();
@@ -1222,8 +1255,7 @@ document.body.addEventListener('click', (e) => {
     hideAll(); show('signin');
   }
   else if(act === 'lb'){ hideAll(); renderLeaderboard(); show('lbScreen'); S.mode = 'menu'; S.paused = false; }
-  else if(act === 'home'){ hideAll(); show('menu'); S.mode = 'menu'; S.paused = false; }
-  else if(act === 'retry') startRun();
+  else if(act === 'home'){ hideAll(); renderMenuStartPicker(); show('menu'); S.mode = 'menu'; S.paused = false; }
   else if(act === 'resume'){ hide('pause'); S.paused = false; }
   else if(act === 'quit'){ hide('pause'); gameOver(); }
   else if(act === 'reroll') doReroll();
@@ -1253,6 +1285,7 @@ S.player = makePlayer();
 const _savedName = getPlayerName();
 if(_savedName){
   document.getElementById('playerTag').textContent = _savedName;
+  renderMenuStartPicker();
   show('menu');
 } else {
   show('signin');
