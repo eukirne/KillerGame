@@ -180,17 +180,6 @@ function updateWeapons(dt){
             }
           }
         }
-        if(S.objective && S.objective.type === 'beacon' && !S.objective.completed){
-          const obj = S.objective;
-          const odx = obj.x - bx, ody = obj.y - by;
-          if(odx*odx + ody*ody < (obj.r + lvl.sz)*(obj.r + lvl.sz)){
-            const last = w.extra.hits[i]['obj'] || 0;
-            if(S.t - last > lvl.hit){
-              w.extra.hits[i]['obj'] = S.t;
-              hitObjective(lvl.dmg * p.dmgMul, bx, by);
-            }
-          }
-        }
       }
       continue;
     }
@@ -203,11 +192,6 @@ function updateWeapons(dt){
         for(const e of S.enemies){
           const dx = e.x - p.x, dy = e.y - p.y;
           if(dx*dx + dy*dy < r2) damage(e, lvl.dmg * p.dmgMul);
-        }
-        if(S.objective && S.objective.type === 'beacon' && !S.objective.completed){
-          const obj = S.objective;
-          const odx = obj.x - p.x, ody = obj.y - p.y;
-          if(odx*odx + ody*ody < r2) hitObjective(lvl.dmg * p.dmgMul, obj.x, obj.y);
         }
       }
       continue;
@@ -329,16 +313,6 @@ function updateProjectiles(dt){
             if(p.pr <= 0){ p.life = 0; break; }
           }
         }
-        if(p.life > 0 && S.objective && S.objective.type === 'beacon' && !S.objective.completed && !p.hits['obj']){
-          const obj = S.objective;
-          const odx = obj.x - p.x, ody = obj.y - p.y;
-          if(odx*odx + ody*ody < (obj.r + p.sz)*(obj.r + p.sz)){
-            p.hits['obj'] = 1;
-            hitObjective(p.dmg, p.x, p.y);
-            p.pr--;
-            if(p.pr <= 0) p.life = 0;
-          }
-        }
       }
     }
 
@@ -372,23 +346,13 @@ function updateProjectiles(dt){
       }
       if(absorbed){ p.life = 0; }
       else {
-        let missileHit = false;
         for(const e of S.enemies){
           const dx = e.x - p.x, dy = e.y - p.y;
           const rr = (e.r + p.sz);
           if(dx*dx + dy*dy < rr*rr){
             damage(e, p.dmg);
             p.life = 0;
-            missileHit = true;
             break;
-          }
-        }
-        if(!missileHit && S.objective && S.objective.type === 'beacon' && !S.objective.completed){
-          const obj = S.objective;
-          const odx = obj.x - p.x, ody = obj.y - p.y;
-          if(odx*odx + ody*ody < (obj.r + p.sz)*(obj.r + p.sz)){
-            hitObjective(p.dmg, p.x, p.y);
-            p.life = 0;
           }
         }
       }
@@ -409,12 +373,27 @@ function updateProjectiles(dt){
           e.vy = (e.vy||0) + (dy/d) * 280;
         }
       }
-      if(S.objective && S.objective.type === 'beacon' && !S.objective.completed && !p.hits['obj']){
-        const obj = S.objective;
-        const odx = obj.x - p.x, ody = obj.y - p.y;
-        if(odx*odx + ody*ody < r2){
-          p.hits['obj'] = 1;
-          hitObjective(p.dmg, obj.x, obj.y);
+    }
+
+    else if(p.type === 'turret'){
+      p.x += p.vx*dt; p.y += p.vy*dt;
+      let absorbed = false;
+      for(const b of S.bodies){
+        const dx = p.x - b.x, dy = p.y - b.y;
+        if(dx*dx + dy*dy < b.r*b.r){ absorbed = true; break; }
+      }
+      if(absorbed){ p.life = 0; }
+      else {
+        for(const e of S.enemies){
+          if(p.hits[e.id]) continue;
+          const dx = e.x - p.x, dy = e.y - p.y;
+          const rr = e.r + p.sz;
+          if(dx*dx + dy*dy < rr*rr){
+            p.hits[e.id] = 1;
+            damage(e, p.dmg);
+            p.pr--;
+            if(p.pr <= 0){ p.life = 0; break; }
+          }
         }
       }
     }
@@ -488,21 +467,6 @@ function spawnEnemy(type){
   e.hpMax = e.hp;
   S.enemies.push(e);
   return e;
-}
-
-function hitObjective(dmg, hx, hy){
-  const obj = S.objective;
-  if(!obj || obj.type !== 'beacon' || obj.completed) return;
-  obj.hp -= dmg;
-  burst(hx, hy, '#ffcf66', 4);
-  throttledSfx('hit', 0.06);
-  if(obj.hp <= 0){
-    obj.completed = true;
-    popup('BEACON DESTROYED', obj.x, obj.y - 30, '#ffcf66');
-    sfx.roomClear();
-    S.shake = 10;
-    burst(obj.x, obj.y, '#ffcf66', 25);
-  }
 }
 
 function updateEnemies(dt){

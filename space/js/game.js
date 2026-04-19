@@ -46,11 +46,20 @@ function generateBodies(){
       x:bx, y:by, r:Math.round(rVar),
       mass: tmpl.mass * rand(0.8, 1.2),
       col: isStar ? tmpl.col : pc.col,
+      origCol: isStar ? tmpl.col : pc.col,
       glow: isStar ? tmpl.glow : pc.glow,
+      origGlow: isStar ? tmpl.glow : pc.glow,
       crashR: Math.round(rVar * (tmpl.crashR / tmpl.r)),
       crashDmg: tmpl.crashDmg,
       isStar: !!tmpl.isStar,
+      conquered: false,
+      conquerProg: 0,
+      turretTimer: 0,
     });
+  }
+  if(!placed.some(b => !b.isStar)){
+    const last = placed[placed.length - 1];
+    if(last){ last.isStar = false; last.col = PLANET_COLS[0].col; last.origCol = last.col; last.glow = PLANET_COLS[0].glow; last.origGlow = last.glow; last.crashDmg = 25; }
   }
   S.bodies = placed;
 }
@@ -60,51 +69,51 @@ function generateStarfield(){
   S.bgStars = [];
   S.nebulae = [];
   const SC = ['#fff','#fff','#fff','#aaccff','#ffddaa','#ffc8a0','#ccddff','#ffe8cc','#ff9988','#88aaff'];
-  for(let i = 0; i < 600; i++){
+  for(let i = 0; i < 700; i++){
     S.bgStars.push({
-      x: rand(-8000, 8000), y: rand(-8000, 8000),
-      sz: rand(0.3, 0.7), bright: rand(0.06, 0.22),
+      x: rand(-2000, 2000), y: rand(-2000, 2000),
+      sz: rand(0.6, 1.2), bright: rand(0.2, 0.5),
       twinkleSpd: rand(0.3, 1.5), depth: rand(0.02, 0.06),
       col: SC[(Math.random()*SC.length)|0],
     });
   }
   for(let i = 0; i < 500; i++){
     S.bgStars.push({
-      x: rand(-5000, 5000), y: rand(-5000, 5000),
-      sz: rand(0.5, 1.6), bright: rand(0.15, 0.55),
+      x: rand(-2500, 2500), y: rand(-2500, 2500),
+      sz: rand(0.8, 2.0), bright: rand(0.35, 0.8),
       twinkleSpd: rand(0.5, 3), depth: rand(0.1, 0.22),
       col: SC[(Math.random()*SC.length)|0],
     });
   }
-  for(let i = 0; i < 180; i++){
+  for(let i = 0; i < 200; i++){
     S.bgStars.push({
-      x: rand(-3500, 3500), y: rand(-3500, 3500),
-      sz: rand(1.0, 2.8), bright: rand(0.4, 1.0),
+      x: rand(-2000, 2000), y: rand(-2000, 2000),
+      sz: rand(1.2, 3.2), bright: rand(0.6, 1.0),
       twinkleSpd: rand(1.5, 5), depth: rand(0.3, 0.5),
       col: SC[(Math.random()*SC.length)|0],
     });
   }
-  const clN = 6 + Math.floor(Math.random() * 5);
+  const clN = 8 + Math.floor(Math.random() * 6);
   for(let c = 0; c < clN; c++){
-    const cx = rand(-4000, 4000), cy = rand(-4000, 4000);
+    const cx = rand(-1800, 1800), cy = rand(-1800, 1800);
     const cc = SC[(Math.random()*SC.length)|0];
-    const sn = 10 + Math.floor(Math.random() * 12);
-    const sp = 40 + Math.random() * 80;
+    const sn = 12 + Math.floor(Math.random() * 14);
+    const sp = 30 + Math.random() * 60;
     const dp = rand(0.08, 0.35);
     for(let i = 0; i < sn; i++){
       S.bgStars.push({
         x: cx + (Math.random()-0.5)*sp*2, y: cy + (Math.random()-0.5)*sp*2,
-        sz: rand(0.4, 2.2), bright: rand(0.25, 0.85),
+        sz: rand(0.6, 2.5), bright: rand(0.4, 0.95),
         twinkleSpd: rand(1, 4), depth: dp + rand(-0.03, 0.03),
         col: Math.random() < 0.6 ? cc : '#fff',
       });
     }
   }
-  const NC = ['rgba(60,80,180,0.04)','rgba(180,60,120,0.03)','rgba(60,180,140,0.03)','rgba(140,60,180,0.04)','rgba(180,120,60,0.03)','rgba(80,60,180,0.035)'];
-  const nebN = 4 + Math.floor(Math.random() * 3);
+  const NC = ['rgba(60,80,180,0.06)','rgba(180,60,120,0.05)','rgba(60,180,140,0.05)','rgba(140,60,180,0.06)','rgba(180,120,60,0.05)','rgba(80,60,180,0.055)'];
+  const nebN = 5 + Math.floor(Math.random() * 4);
   for(let i = 0; i < nebN; i++){
     S.nebulae.push({
-      x: rand(-4000, 4000), y: rand(-4000, 4000),
+      x: rand(-1800, 1800), y: rand(-1800, 1800),
       r: rand(200, 500), col: NC[(Math.random()*NC.length)|0],
       depth: rand(0.04, 0.15),
     });
@@ -149,47 +158,6 @@ function forceFireAll(){
   if(fired) sfx.tap();
 }
 
-function generateObjective(){
-  const type = Math.random() < 0.6 ? 'beacon' : 'core';
-  let ox, oy;
-  if(S.bodies.length > 0){
-    const b = S.bodies[Math.floor(Math.random() * S.bodies.length)];
-    const angle = Math.random() * Math.PI * 2;
-    const dist = b.r + 80 + Math.random() * 120;
-    ox = b.x + Math.cos(angle) * dist;
-    oy = b.y + Math.sin(angle) * dist;
-  } else {
-    const ar = S.arena;
-    ox = rand(ar.x + 200, ar.x + ar.w - 200);
-    oy = rand(ar.y + 200, ar.y + ar.h - 200);
-  }
-  const room = S.room;
-  const hp = Math.round(200 + room * 50);
-  S.objective = {
-    type, x: ox, y: oy,
-    r: type === 'beacon' ? 22 : 16,
-    hp: type === 'beacon' ? hp : 0,
-    hpMax: type === 'beacon' ? hp : 0,
-    completed: false,
-  };
-  const gCount = 2 + Math.min(3, Math.floor(room / 3));
-  for(let i = 0; i < gCount; i++){
-    const t = pickWeighted(S.sector.pool, S.sector.weights);
-    const ge = spawnEnemy(t);
-    const ga = Math.random() * Math.PI * 2;
-    const gd = 60 + Math.random() * 100;
-    ge.x = ox + Math.cos(ga) * gd;
-    ge.y = oy + Math.sin(ga) * gd;
-    ge.hp = Math.round(ge.hp * 2);
-    ge.hpMax = ge.hp;
-    ge.spd = Math.round(ge.spd * 1.15);
-    ge.col = '#ff9944';
-    ge.guardian = true;
-  }
-  const label = type === 'beacon' ? 'DESTROY THE BEACON' : 'RETRIEVE THE CORE';
-  popup(label, S.player.x, S.player.y - 50, type === 'beacon' ? '#ffcf66' : '#7ad6ff');
-}
-
 function startRoom(skipBodies){
   const n = S.room;
   S.roomState = 'fighting';
@@ -197,24 +165,77 @@ function startRoom(skipBodies){
   if(!skipBodies) generateBodies();
   S.roomKind = 'normal';
   S.roomSpawnLeft = Math.min(80, 15 + Math.floor(n * 3));
-  generateObjective();
+  const planets = S.bodies.filter(b => !b.isStar);
+  if(planets.length > 0){
+    popup('CONQUER ALL PLANETS', S.player.x, S.player.y - 50, '#44dd88');
+  }
+}
+
+function updateConquer(dt){
+  const p = S.player;
+  const isStationary = !p.moving;
+  for(const b of S.bodies){
+    if(b.isStar || b.conquered) continue;
+    const dx = p.x - b.x, dy = p.y - b.y;
+    const dist = Math.hypot(dx, dy);
+    const captureRange = b.r + 80;
+    if(dist < captureRange && isStationary){
+      b.conquerProg = Math.min(1, (b.conquerProg || 0) + dt / 3.0);
+      if(((S.t * 8) | 0) % 3 === 0){
+        const a = Math.random() * Math.PI * 2;
+        const sr = 8;
+        S.parts.push({
+          x: p.x + Math.cos(a)*sr, y: p.y + Math.sin(a)*sr,
+          vx: (b.x - p.x) * 1.8, vy: (b.y - p.y) * 1.8,
+          life: 0.4, maxLife: 0.4, col: '#44dd88', sz: 2
+        });
+      }
+      if(b.conquerProg >= 1){
+        b.conquered = true;
+        b.conquerProg = 1;
+        b.col = '#44dd88';
+        b.glow = '#22aa66';
+        b.turretTimer = 1.0;
+        popup('CONQUERED', b.x, b.y - b.r - 20, '#44dd88');
+        sfx.pickup();
+        S.shake = 4;
+        burst(b.x, b.y, '#44dd88', 15);
+      }
+    } else {
+      b.conquerProg = Math.max(0, (b.conquerProg || 0) - dt * 0.5);
+    }
+  }
+  for(const b of S.bodies){
+    if(!b.conquered) continue;
+    b.turretTimer -= dt;
+    if(b.turretTimer <= 0){
+      b.turretTimer = 1.6;
+      let nearest = null, nd = Infinity;
+      for(const e of S.enemies){
+        const dx = e.x - b.x, dy = e.y - b.y;
+        const d = Math.hypot(dx, dy);
+        if(d < 420 && d < nd){ nd = d; nearest = e; }
+      }
+      if(nearest){
+        const dx = nearest.x - b.x, dy = nearest.y - b.y;
+        const d = Math.hypot(dx, dy) + 1e-3;
+        S.projectiles.push({
+          type:'turret', x: b.x + (dx/d)*(b.r+5), y: b.y + (dy/d)*(b.r+5),
+          vx: (dx/d)*340, vy: (dy/d)*340,
+          dmg: 12 + S.room * 3, pr: 2, life: 2.0, sz: 5,
+          col: '#44dd88', gravity: false, hits: {}
+        });
+        throttledSfx('shoot', 0.15);
+      }
+    }
+  }
 }
 
 function updateSpawner(dt){
   const p = S.player;
   if(S.roomState === 'fighting'){
-    // Core pickup check
-    if(S.objective && S.objective.type === 'core' && !S.objective.completed){
-      const obj = S.objective;
-      const odx = p.x - obj.x, ody = p.y - obj.y;
-      if(odx*odx + ody*ody < (p.r + obj.r) * (p.r + obj.r)){
-        obj.completed = true;
-        popup('CORE RETRIEVED', obj.x, obj.y - 30, '#7ad6ff');
-        sfx.roomClear();
-        S.shake = 6;
-        burst(obj.x, obj.y, '#7ad6ff', 20);
-      }
-    }
+    const planets = S.bodies.filter(b => !b.isStar);
+    const allConquered = planets.length > 0 && planets.every(b => b.conquered);
     S.roomSpawnTimer -= dt;
     if(S.roomSpawnTimer <= 0 && S.roomSpawnLeft > 0){
       const maxOnScreen = 10 + Math.floor(S.room * 1.5);
@@ -229,10 +250,11 @@ function updateSpawner(dt){
       }
       S.roomSpawnTimer = Math.max(0.25, 0.9 - S.room * 0.03);
     }
-    if(S.roomSpawnLeft <= 0 && S.objective && !S.objective.completed){
+    if(S.roomSpawnLeft <= 0 && !allConquered){
       S.roomSpawnLeft = Math.min(25, 4 + Math.floor(S.room * 1.2));
     }
-    if(S.objective && S.objective.completed && S.roomSpawnLeft <= 0 && S.enemies.length === 0){
+    if(allConquered && S.roomSpawnLeft > 0) S.roomSpawnLeft = 0;
+    if(allConquered && S.enemies.length === 0){
       S.roomState = 'cleared';
       S.roomClearT = 1.4;
       const healAmt = 5 + Math.floor(S.room * 0.25);
@@ -240,9 +262,6 @@ function updateSpawner(dt){
       popup('SYSTEM ' + S.room + ' CLEAR', p.x, p.y - 40, '#ffcf66');
       sfx.roomClear();
       gainXp(3 + S.room * 0.4);
-    }
-    if(S.objective && S.objective.completed && S.roomSpawnLeft > 0){
-      S.roomSpawnLeft = 0;
     }
   } else if(S.roomState === 'cleared'){
     S.roomClearT -= dt;
@@ -576,7 +595,7 @@ function render(){
     const sx = st.x - S.cam.x * st.depth + W/2;
     const sy = st.y - S.cam.y * st.depth + H/2;
     if(sx < -4 || sx > W+4 || sy < -4 || sy > H+4) continue;
-    const twinkle = 0.55 + 0.45 * Math.sin(S.t * st.twinkleSpd + st.x);
+    const twinkle = 0.7 + 0.3 * Math.sin(S.t * st.twinkleSpd + st.x);
     ctx.globalAlpha = st.bright * twinkle;
     ctx.fillStyle = st.col || '#fff';
     if(st.sz > 1.8){
@@ -635,11 +654,47 @@ function render(){
       ctx.arc(b.x, b.y, b.r, 0, Math.PI*2);
       ctx.fill();
     }
-    ctx.strokeStyle = b.isStar ? 'rgba(255,200,60,0.06)' : 'rgba(120,160,255,0.05)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(b.x, b.y, b.r * 2.2, 0, Math.PI*2);
-    ctx.stroke();
+    if(b.conquered){
+      ctx.strokeStyle = '#44dd88';
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = 0.4 + 0.15 * Math.sin(S.t * 3);
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r + 14, 0, Math.PI*2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#44dd88';
+      ctx.beginPath();
+      ctx.moveTo(b.x, b.y - b.r - 8);
+      ctx.lineTo(b.x - 5, b.y - b.r - 2);
+      ctx.lineTo(b.x + 5, b.y - b.r - 2);
+      ctx.closePath();
+      ctx.fill();
+    } else {
+      ctx.strokeStyle = b.isStar ? 'rgba(255,200,60,0.06)' : 'rgba(120,160,255,0.05)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r * 2.2, 0, Math.PI*2);
+      ctx.stroke();
+    }
+    if(!b.isStar && !b.conquered && b.conquerProg > 0){
+      const pl2 = S.player;
+      ctx.strokeStyle = '#44dd88';
+      ctx.globalAlpha = b.conquerProg * 0.5;
+      ctx.lineWidth = 1.5 + b.conquerProg * 2;
+      ctx.setLineDash([8, 6]);
+      ctx.beginPath();
+      ctx.moveTo(pl2.x, pl2.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 0.8;
+      ctx.strokeStyle = '#44dd88';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r + 12, -Math.PI/2, -Math.PI/2 + b.conquerProg * Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
   }
 
   // Pickups
@@ -794,65 +849,6 @@ function render(){
   ctx.fill();
   ctx.globalAlpha = 1;
 
-  // Objective (world space)
-  if(S.objective && !S.objective.completed){
-    const obj = S.objective;
-    const pulse = 0.6 + 0.4 * Math.sin(S.t * 3);
-    if(obj.type === 'beacon'){
-      ctx.fillStyle = `rgba(255,207,102,${0.08 * pulse})`;
-      ctx.beginPath();
-      ctx.arc(obj.x, obj.y, obj.r * 3, 0, Math.PI*2);
-      ctx.fill();
-      ctx.fillStyle = '#ffcf66';
-      ctx.globalAlpha = 0.7 + 0.3 * pulse;
-      ctx.beginPath();
-      for(let hi = 0; hi < 6; hi++){
-        const ha = (hi / 6) * Math.PI * 2 + S.t * 0.5;
-        const hx = obj.x + Math.cos(ha) * obj.r;
-        const hy = obj.y + Math.sin(ha) * obj.r;
-        if(hi === 0) ctx.moveTo(hx, hy); else ctx.lineTo(hx, hy);
-      }
-      ctx.closePath();
-      ctx.fill();
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = '#000';
-      ctx.fillRect(obj.x - 22, obj.y - obj.r - 14, 44, 5);
-      ctx.fillStyle = '#ffcf66';
-      ctx.fillRect(obj.x - 22, obj.y - obj.r - 14, 44 * Math.max(0, obj.hp / obj.hpMax), 5);
-      ctx.fillStyle = '#ffcf66';
-      ctx.font = '700 10px ui-monospace,Menlo,Consolas,monospace';
-      ctx.textAlign = 'center';
-      ctx.globalAlpha = 0.8;
-      ctx.fillText('BEACON', obj.x, obj.y - obj.r - 20);
-      ctx.globalAlpha = 1;
-    } else {
-      ctx.fillStyle = `rgba(122,214,255,${0.1 * pulse})`;
-      ctx.beginPath();
-      ctx.arc(obj.x, obj.y, obj.r * 2.5, 0, Math.PI*2);
-      ctx.fill();
-      ctx.save();
-      ctx.translate(obj.x, obj.y);
-      ctx.rotate(S.t * 2);
-      ctx.fillStyle = '#7ad6ff';
-      ctx.globalAlpha = 0.8 + 0.2 * pulse;
-      ctx.beginPath();
-      ctx.moveTo(0, -obj.r);
-      ctx.lineTo(obj.r * 0.6, 0);
-      ctx.lineTo(0, obj.r);
-      ctx.lineTo(-obj.r * 0.6, 0);
-      ctx.closePath();
-      ctx.fill();
-      ctx.globalAlpha = 1;
-      ctx.restore();
-      ctx.fillStyle = '#7ad6ff';
-      ctx.font = '700 10px ui-monospace,Menlo,Consolas,monospace';
-      ctx.textAlign = 'center';
-      ctx.globalAlpha = 0.8;
-      ctx.fillText('CORE', obj.x, obj.y - obj.r - 10);
-      ctx.globalAlpha = 1;
-    }
-  }
-
   // Particles
   for(const pt of S.parts){
     ctx.globalAlpha = Math.max(0, pt.life / pt.maxLife);
@@ -874,41 +870,6 @@ function render(){
   ctx.globalAlpha = 1;
 
   ctx.restore();
-
-  // Objective direction arrow (screen space)
-  if(S.objective && !S.objective.completed){
-    const obj = S.objective;
-    const osx = obj.x - S.cam.x + W/2;
-    const osy = obj.y - S.cam.y + H/2;
-    const margin = 50;
-    if(osx < margin || osx > W - margin || osy < margin || osy > H - margin){
-      const oAngle = Math.atan2(osy - H/2, osx - W/2);
-      const aDist = Math.min(W, H) * 0.42;
-      const ax = W/2 + Math.cos(oAngle) * aDist;
-      const ay = H/2 + Math.sin(oAngle) * aDist;
-      ctx.save();
-      ctx.translate(ax, ay);
-      ctx.rotate(oAngle);
-      ctx.fillStyle = obj.type === 'beacon' ? '#ffcf66' : '#7ad6ff';
-      ctx.globalAlpha = 0.7 + 0.3 * Math.sin(S.t * 4);
-      ctx.beginPath();
-      ctx.moveTo(14, 0);
-      ctx.lineTo(-8, -8);
-      ctx.lineTo(-4, 0);
-      ctx.lineTo(-8, 8);
-      ctx.closePath();
-      ctx.fill();
-      ctx.globalAlpha = 1;
-      ctx.restore();
-      const oDist = Math.round(Math.hypot(obj.x - S.player.x, obj.y - S.player.y));
-      ctx.fillStyle = obj.type === 'beacon' ? '#ffcf66' : '#7ad6ff';
-      ctx.font = '600 10px ui-monospace,Menlo,Consolas,monospace';
-      ctx.textAlign = 'center';
-      ctx.globalAlpha = 0.7;
-      ctx.fillText(oDist + 'm', ax, ay + 18);
-      ctx.globalAlpha = 1;
-    }
-  }
 
   if(S.roomState === 'warping' && S.warpT > 0){
     const warpTotal = 1.5;
@@ -984,18 +945,6 @@ function render(){
     const ex = mmX + (e.x - ar.x) * mmScale;
     const ey = mmY + (e.y - ar.y) * mmScale;
     ctx.fillRect(ex - 1, ey - 1, 2, 2);
-  }
-
-  if(S.objective && !S.objective.completed){
-    const obj = S.objective;
-    const ox = mmX + (obj.x - ar.x) * mmScale;
-    const oy = mmY + (obj.y - ar.y) * mmScale;
-    ctx.fillStyle = obj.type === 'beacon' ? '#ffcf66' : '#7ad6ff';
-    ctx.globalAlpha = 0.6 + 0.4 * Math.sin(S.t * 4);
-    ctx.beginPath();
-    ctx.arc(ox, oy, 3.5, 0, Math.PI*2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
   }
 
   const px = mmX + (pl.x - ar.x) * mmScale;
@@ -1114,6 +1063,7 @@ function step(dt){
   S.cam.x += (p.x - S.cam.x) * Math.min(1, dt * 9);
   S.cam.y += (p.y - S.cam.y) * Math.min(1, dt * 9);
 
+  updateConquer(dt);
   updateSpawner(dt);
   updateEnemies(dt);
   updateWeapons(dt);
