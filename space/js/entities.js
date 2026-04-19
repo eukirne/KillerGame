@@ -583,10 +583,6 @@ function updateEnemies(dt){
     resolveBodyCollision(e);
     checkCrashBurnEnemy(e);
 
-    // Clamp to arena bounds
-    e.x = clamp(e.x, ar.x + e.r, ar.x + ar.w - e.r);
-    e.y = clamp(e.y, ar.y + e.r, ar.y + ar.h - e.r);
-
     if(e.ranged){
       e.shootT -= dt;
       if(e.shootT <= 0 && d < 520){

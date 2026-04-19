@@ -58,13 +58,25 @@ function generateBodies(){
 // ---------- Starfield ----------
 function generateStarfield(){
   S.bgStars = [];
-  for(let i = 0; i < 600; i++){
+  for(let i = 0; i < 300; i++){
     S.bgStars.push({
-      x: rand(-4000, 4000),
-      y: rand(-4000, 4000),
-      sz: rand(0.5, 1.8),
-      bright: rand(0.25, 1.0),
-      twinkleSpd: rand(1, 4.5),
+      x: rand(-6000, 6000), y: rand(-6000, 6000),
+      sz: rand(0.3, 0.8), bright: rand(0.1, 0.35),
+      twinkleSpd: rand(0.5, 2), depth: 0.05,
+    });
+  }
+  for(let i = 0; i < 400; i++){
+    S.bgStars.push({
+      x: rand(-4000, 4000), y: rand(-4000, 4000),
+      sz: rand(0.5, 1.8), bright: rand(0.25, 0.8),
+      twinkleSpd: rand(1, 4.5), depth: 0.2,
+    });
+  }
+  for(let i = 0; i < 120; i++){
+    S.bgStars.push({
+      x: rand(-3000, 3000), y: rand(-3000, 3000),
+      sz: rand(1.2, 2.8), bright: rand(0.5, 1.0),
+      twinkleSpd: rand(2, 6), depth: 0.45,
     });
   }
 }
@@ -72,15 +84,12 @@ function generateStarfield(){
 // ---------- Rooms ----------
 function placeAtArenaEdge(e){
   const p = S.player;
-  const a = S.arena;
   const spawnDist = Math.max(W, H) * 0.6 + 80;
   for(let k = 0; k < 20; k++){
     const ang = Math.random() * Math.PI * 2;
     const dist = spawnDist + Math.random() * 200;
     const tx = p.x + Math.cos(ang) * dist;
     const ty = p.y + Math.sin(ang) * dist;
-    if(tx < a.x + e.r || tx > a.x + a.w - e.r) continue;
-    if(ty < a.y + e.r || ty > a.y + a.h - e.r) continue;
     let insideBody = false;
     for(const b of S.bodies){
       if(Math.hypot(tx-b.x, ty-b.y) < b.r + e.r + 30){ insideBody = true; break; }
@@ -90,8 +99,8 @@ function placeAtArenaEdge(e){
     return;
   }
   const ang = Math.random() * Math.PI * 2;
-  e.x = clamp(p.x + Math.cos(ang) * spawnDist, a.x + e.r, a.x + a.w - e.r);
-  e.y = clamp(p.y + Math.sin(ang) * spawnDist, a.y + e.r, a.y + a.h - e.r);
+  e.x = p.x + Math.cos(ang) * spawnDist;
+  e.y = p.y + Math.sin(ang) * spawnDist;
 }
 
 function forceFireAll(){
@@ -449,8 +458,8 @@ function render(){
 
   // Parallax starfield (screen space, slow scroll)
   for(const st of S.bgStars){
-    const sx = st.x - S.cam.x * 0.25 + W/2;
-    const sy = st.y - S.cam.y * 0.25 + H/2;
+    const sx = st.x - S.cam.x * st.depth + W/2;
+    const sy = st.y - S.cam.y * st.depth + H/2;
     if(sx < -4 || sx > W+4 || sy < -4 || sy > H+4) continue;
     const twinkle = 0.55 + 0.45 * Math.sin(S.t * st.twinkleSpd + st.x);
     ctx.globalAlpha = st.bright * twinkle;
@@ -909,10 +918,6 @@ function step(dt){
   p.y += p.vy * dt;
   p.moving = Math.hypot(p.vx, p.vy) > speed * 0.08;
 
-  const a = S.arena;
-  p.x = clamp(p.x, a.x + p.r, a.x + a.w - p.r);
-  p.y = clamp(p.y, a.y + p.r, a.y + a.h - p.r);
-
   resolveBodyCollision(p);
   checkCrashBurn(p);
 
@@ -933,10 +938,6 @@ function step(dt){
 
   S.cam.x += (p.x - S.cam.x) * Math.min(1, dt * 9);
   S.cam.y += (p.y - S.cam.y) * Math.min(1, dt * 9);
-  if(a.w >= W) S.cam.x = clamp(S.cam.x, a.x + W/2, a.x + a.w - W/2);
-  else S.cam.x = a.x + a.w / 2;
-  if(a.h >= H) S.cam.y = clamp(S.cam.y, a.y + H/2, a.y + a.h - H/2);
-  else S.cam.y = a.y + a.h / 2;
 
   updateSpawner(dt);
   updateEnemies(dt);
