@@ -1,0 +1,176 @@
+const App = (() => {
+  let currentUser = null;
+  let currentRoute = null;
+
+  function showAuthScreen() {
+    document.getElementById('auth-screen').classList.remove('hidden');
+    document.getElementById('app-shell').classList.add('hidden');
+  }
+
+  function showApp() {
+    document.getElementById('auth-screen').classList.add('hidden');
+    document.getElementById('app-shell').classList.remove('hidden');
+  }
+
+  function renderUserChip() {
+    const chip = document.getElementById('user-chip');
+    chip.innerHTML = `<span class="avatar avatar-sm" style="background:${currentUser.avatarColor}">${Fmt.initials(currentUser.name)}</span><span class="user-chip-name">${Fmt.escapeHtml(currentUser.name)}</span>`;
+  }
+
+  async function boot() {
+    wireAuthForms();
+    wireShell();
+
+    const token = Api.getToken();
+    if (!token) {
+      showAuthScreen();
+      return;
+    }
+    try {
+      const { user } = await Api.get('/auth/me');
+      currentUser = user;
+      showApp();
+      renderUserChip();
+      window.addEventListener('hashchange', route);
+      route();
+    } catch (e) {
+      Api.setToken(null);
+      showAuthScreen();
+    }
+  }
+
+  function wireAuthForms() {
+    const loginForm = document.getElementById('login-form');
+    const signupForm = document.getElementById('signup-form');
+    const errorEl = document.getElementById('auth-error');
+
+    document.getElementById('show-signup').addEventListener('click', (e) => {
+      e.preventDefault();
+      loginForm.classList.add('hidden');
+      signupForm.classList.remove('hidden');
+      errorEl.classList.add('hidden');
+    });
+    document.getElementById('show-login').addEventListener('click', (e) => {
+      e.preventDefault();
+      signupForm.classList.add('hidden');
+      loginForm.classList.remove('hidden');
+      errorEl.classList.add('hidden');
+    });
+
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorEl.classList.add('hidden');
+      try {
+        const { token, user } = await Api.post('/auth/login', {
+          email: document.getElementById('login-email').value,
+          password: document.getElementById('login-password').value,
+        });
+        Api.setToken(token);
+        currentUser = user;
+        showApp();
+        renderUserChip();
+        window.addEventListener('hashchange', route);
+        location.hash = '#/dashboard';
+        route();
+      } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.classList.remove('hidden');
+      }
+    });
+
+    signupForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorEl.classList.add('hidden');
+      try {
+        const { token, user } = await Api.post('/auth/signup', {
+          name: document.getElementById('signup-name').value,
+          email: document.getElementById('signup-email').value,
+          password: document.getElementById('signup-password').value,
+        });
+        Api.setToken(token);
+        currentUser = user;
+        showApp();
+        renderUserChip();
+        window.addEventListener('hashchange', route);
+        location.hash = '#/dashboard';
+        route();
+      } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.classList.remove('hidden');
+      }
+    });
+  }
+
+  function wireShell() {
+    document.getElementById('logout-btn').addEventListener('click', () => {
+      Api.setToken(null);
+      currentUser = null;
+      location.hash = '';
+      showAuthScreen();
+    });
+    document.getElementById('add-expense-btn').addEventListener('click', () => ExpenseFlow.openChooser());
+    document.getElementById('new-group-btn').addEventListener('click', () => Views.openCreateGroupModal());
+    document.getElementById('add-friend-btn').addEventListener('click', () => Views.openAddFriendModal());
+  }
+
+  const TITLES = { dashboard: 'Dashboard', groups: 'Groups', friends: 'Friends', activity: 'Activity' };
+
+  async function route() {
+    const hash = location.hash.replace(/^#\//, '') || 'dashboard';
+    const parts = hash.split('/');
+    currentRoute = hash;
+    const root = document.getElementById('view-root');
+
+    document.querySelectorAll('.side-nav a').forEach((a) => a.classList.toggle('active', a.dataset.route === parts[0]));
+
+    try {
+      if (parts[0] === 'dashboard') {
+        setTitle('Dashboard');
+        await Views.dashboard(root);
+      } else if (parts[0] === 'groups' && parts[1]) {
+        setTitle('Group');
+        await Views.groupDetail(root, Number(parts[1]));
+      } else if (parts[0] === 'groups') {
+        setTitle('Groups');
+        await Views.groups(root);
+      } else if (parts[0] === 'friends' && parts[1]) {
+        setTitle('Friend');
+        await Views.friendDetail(root, Number(parts[1]));
+      } else if (parts[0] === 'friends') {
+        setTitle('Friends');
+        await Views.friends(root);
+      } else if (parts[0] === 'activity') {
+        setTitle('Activity');
+        await Views.activity(root);
+      } else {
+        setTitle('Dashboard');
+        await Views.dashboard(root);
+      }
+    } catch (e) {
+      if (e.status === 401) {
+        Api.setToken(null);
+        showAuthScreen();
+        return;
+      }
+      root.innerHTML = `<div class="empty-state"><div class="empty-title">Something went wrong</div><div class="empty-body">${Fmt.escapeHtml(e.message)}</div></div>`;
+    }
+  }
+
+  function setTitle(title) {
+    document.getElementById('page-title').textContent = title;
+  }
+
+  function refreshCurrentView() {
+    route();
+  }
+
+  return {
+    boot,
+    refreshCurrentView,
+    get currentUser() {
+      return currentUser;
+    },
+  };
+})();
+
+document.addEventListener('DOMContentLoaded', App.boot);
