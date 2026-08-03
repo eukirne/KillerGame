@@ -4,6 +4,9 @@
   "description": "A Splitwise-like expense sharing web app",
   "main": "server/index.js",
   "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "start": "node server/index.js",
     "dev": "node server/index.js"

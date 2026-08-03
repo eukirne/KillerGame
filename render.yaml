@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: splitshare
+    runtime: node
+    rootDir: expense-app
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true
