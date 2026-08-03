@@ -3,20 +3,24 @@ const db = require('../db/db');
 // All cross-currency balance math converts into this currency.
 const BASE_CURRENCY = 'USD';
 
-function cacheGet(currency, date) {
-  const row = db.prepare('SELECT rate FROM fx_rates WHERE currency = ? AND date = ?').get(currency, date);
+async function cacheGet(currency, date) {
+  const row = await db.get('SELECT rate FROM fx_rates WHERE currency = ? AND date = ?', [currency, date]);
   return row ? row.rate : null;
 }
 
 // Most recent rate we have for this currency on any date, used as a
 // last-resort fallback when today's lookup for a specific date fails.
-function cacheGetClosest(currency) {
-  const row = db.prepare('SELECT rate FROM fx_rates WHERE currency = ? ORDER BY date DESC LIMIT 1').get(currency);
+async function cacheGetClosest(currency) {
+  const row = await db.get('SELECT rate FROM fx_rates WHERE currency = ? ORDER BY date DESC LIMIT 1', [currency]);
   return row ? row.rate : null;
 }
 
-function cacheSet(currency, date, rate) {
-  db.prepare('INSERT OR REPLACE INTO fx_rates (currency, date, rate) VALUES (?, ?, ?)').run(currency, date, rate);
+async function cacheSet(currency, date, rate) {
+  await db.run(
+    `INSERT INTO fx_rates (currency, date, rate) VALUES (?, ?, ?)
+     ON CONFLICT (currency, date) DO UPDATE SET rate = EXCLUDED.rate, fetched_at = NOW()`,
+    [currency, date, rate]
+  );
 }
 
 // Frankfurter (ECB-backed, free, no API key) gives how many `to` units
@@ -41,15 +45,17 @@ async function fetchRate(currency, date) {
 async function getRates(pairs) {
   const map = new Map();
   const misses = [];
+  const seen = new Set();
 
   for (const { currency, date } of pairs) {
     const key = `${currency}|${date}`;
-    if (map.has(key)) continue;
+    if (seen.has(key)) continue;
+    seen.add(key);
     if (currency === BASE_CURRENCY) {
       map.set(key, 1);
       continue;
     }
-    const cached = cacheGet(currency, date);
+    const cached = await cacheGet(currency, date);
     if (cached != null) map.set(key, cached);
     else misses.push({ currency, date, key });
   }
@@ -58,10 +64,10 @@ async function getRates(pairs) {
     misses.map(async ({ currency, date, key }) => {
       try {
         const rate = await fetchRate(currency, date);
-        cacheSet(currency, date, rate);
+        await cacheSet(currency, date, rate);
         map.set(key, rate);
       } catch (e) {
-        const fallback = cacheGetClosest(currency);
+        const fallback = await cacheGetClosest(currency);
         map.set(key, fallback != null ? fallback : 1);
       }
     })

@@ -31,19 +31,19 @@ function baseCents(amount, currency, date, rates) {
  * the given user, and netCents < 0 means the given user owes them.
  */
 async function getUserBalances(userId) {
-  const shareRows = db
-    .prepare(
-      `SELECT es.user_id AS ower, e.paid_by AS payer, es.amount AS amt, e.currency AS currency, e.date AS date
+  const shareRows = await db.all(
+    `SELECT es.user_id AS ower, e.paid_by AS payer, es.amount AS amt, e.currency AS currency, e.date AS date
        FROM expense_shares es
        JOIN expenses e ON e.id = es.expense_id
        WHERE e.deleted = 0 AND es.user_id != e.paid_by
-         AND (es.user_id = ? OR e.paid_by = ?)`
-    )
-    .all(userId, userId);
+         AND (es.user_id = ? OR e.paid_by = ?)`,
+    [userId, userId]
+  );
 
-  const settlementRows = db
-    .prepare(`SELECT from_user, to_user, amount, currency, date FROM settlements WHERE from_user = ? OR to_user = ?`)
-    .all(userId, userId);
+  const settlementRows = await db.all(
+    `SELECT from_user, to_user, amount, currency, date FROM settlements WHERE from_user = ? OR to_user = ?`,
+    [userId, userId]
+  );
 
   const rates = await fx.getRates([
     ...shareRows.map((r) => ({ currency: r.currency, date: r.date })),
@@ -84,23 +84,19 @@ async function getUserOverallNet(userId) {
 async function getGroupNetPositions(groupId, memberIds) {
   const net = new Map(memberIds.map((id) => [id, 0]));
 
-  const expenseRows = db
-    .prepare(`SELECT id, amount, paid_by, currency, date FROM expenses WHERE group_id = ? AND deleted = 0`)
-    .all(groupId);
+  const expenseRows = await db.all(`SELECT id, amount, paid_by, currency, date FROM expenses WHERE group_id = ? AND deleted = 0`, [
+    groupId,
+  ]);
   const expenseIds = expenseRows.map((e) => e.id);
   const expenseById = new Map(expenseRows.map((e) => [e.id, e]));
 
   let shareRows = [];
   if (expenseIds.length) {
     const placeholders = expenseIds.map(() => '?').join(',');
-    shareRows = db
-      .prepare(`SELECT expense_id, user_id, amount FROM expense_shares WHERE expense_id IN (${placeholders})`)
-      .all(...expenseIds);
+    shareRows = await db.all(`SELECT expense_id, user_id, amount FROM expense_shares WHERE expense_id IN (${placeholders})`, expenseIds);
   }
 
-  const settlementRows = db
-    .prepare(`SELECT from_user, to_user, amount, currency, date FROM settlements WHERE group_id = ?`)
-    .all(groupId);
+  const settlementRows = await db.all(`SELECT from_user, to_user, amount, currency, date FROM settlements WHERE group_id = ?`, [groupId]);
 
   const rates = await fx.getRates([
     ...expenseRows.map((e) => ({ currency: e.currency, date: e.date })),
@@ -128,23 +124,17 @@ async function getGroupNetPositions(groupId, memberIds) {
  * the group's balance breakdown list. Amounts in fx.BASE_CURRENCY cents.
  */
 async function getGroupPairwiseBalances(groupId, memberIds) {
-  const expenseRows = db
-    .prepare(`SELECT id, paid_by, currency, date FROM expenses WHERE group_id = ? AND deleted = 0`)
-    .all(groupId);
+  const expenseRows = await db.all(`SELECT id, paid_by, currency, date FROM expenses WHERE group_id = ? AND deleted = 0`, [groupId]);
   const expenseIds = expenseRows.map((e) => e.id);
   const expenseById = new Map(expenseRows.map((e) => [e.id, e]));
 
   let shareRows = [];
   if (expenseIds.length) {
     const placeholders = expenseIds.map(() => '?').join(',');
-    shareRows = db
-      .prepare(`SELECT expense_id, user_id, amount FROM expense_shares WHERE expense_id IN (${placeholders})`)
-      .all(...expenseIds);
+    shareRows = await db.all(`SELECT expense_id, user_id, amount FROM expense_shares WHERE expense_id IN (${placeholders})`, expenseIds);
   }
 
-  const settlementRows = db
-    .prepare(`SELECT from_user, to_user, amount, currency, date FROM settlements WHERE group_id = ?`)
-    .all(groupId);
+  const settlementRows = await db.all(`SELECT from_user, to_user, amount, currency, date FROM settlements WHERE group_id = ?`, [groupId]);
 
   const rates = await fx.getRates([
     ...expenseRows.map((e) => ({ currency: e.currency, date: e.date })),

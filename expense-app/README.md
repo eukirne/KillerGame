@@ -23,27 +23,48 @@ expenses with flexible splitting, track who owes whom, and settle up.
 
 ## Stack
 
-Plain Node.js/Express + SQLite (`better-sqlite3`) on the backend, a
-dependency-free vanilla JS single-page app on the frontend — no build step.
+Node.js/Express + Postgres on the backend, a dependency-free vanilla JS
+single-page app on the frontend — no build step.
+
+Postgres (rather than a local SQLite file) so data survives redeploys and,
+on free hosting tiers, the instance spinning down between requests — see
+[Deploying to Render](#deploying-to-render-free-public-url) below for why
+that matters and how to get a free persistent database.
 
 Exchange rates come from [Frankfurter](https://frankfurter.dev) (free, no API
-key, ECB-backed historical rates back to 1999) and are cached in SQLite by
-`(currency, date)` so each historical rate is only fetched once. If the rate
-lookup ever fails (offline, rate-limited, unsupported currency), balances
-fall back to the most recent cached rate for that currency, or 1:1 as a last
-resort, rather than breaking.
+key, ECB-backed historical rates back to 1999) and are cached in the
+database by `(currency, date)` so each historical rate is only fetched once.
+If the rate lookup ever fails (offline, rate-limited, unsupported currency),
+balances fall back to the most recent cached rate for that currency, or 1:1
+as a last resort, rather than breaking.
 
 ## Running locally
 
+You need a Postgres database to point the app at — either a free hosted one
+(see [Getting a free Postgres database](#getting-a-free-postgres-database)
+below) or a local install.
+
 ```bash
 cd expense-app
+cp .env.example .env   # then edit DATABASE_URL to point at your database
 npm install
 npm start
 ```
 
 The app is served at `http://localhost:3000` (set `PORT` to change it). The
-SQLite database file is created automatically at `server/db/splitshare.db`
-on first run.
+database schema is created automatically on first run.
+
+## Getting a free Postgres database
+
+[Neon](https://neon.tech) and [Supabase](https://supabase.com) both offer a
+free Postgres tier that doesn't expire and doesn't require a card:
+
+1. Sign up (GitHub login works on both) and create a new project.
+2. Copy the connection string it gives you (starts with `postgres://` or
+   `postgresql://`) — on Neon it's on the project dashboard; on Supabase
+   it's under Project Settings → Database → Connection string (use the
+   "Connection pooling" one if offered).
+3. Use that as `DATABASE_URL`, locally in `.env` and on Render (see below).
 
 ## Deploying to Render (free, public URL)
 
@@ -58,26 +79,28 @@ A `render.yaml` Blueprint lives at the repo root, so Render can deploy the
 3. Render finds `render.yaml` and provisions a free web service named
    `splitshare` (build: `npm install`, start: `npm start`, `JWT_SECRET`
    auto-generated). Click **Apply**.
-4. After the build finishes (~2-3 min) Render gives you a public URL like
+4. Render will prompt for the `DATABASE_URL` env var since it isn't stored
+   in git — paste in your Neon/Supabase connection string from above (or
+   add it afterwards under the service's **Environment** tab).
+5. After the build finishes (~2-3 min) Render gives you a public URL like
    `https://splitshare-xxxx.onrender.com` — open that on your phone to sign
    up and use the app.
 
-Notes on the free plan: the service spins down after 15 minutes idle (the
-next request takes ~30s to wake it back up), and there's no persistent
-disk, so the SQLite database resets on every redeploy/restart. Fine for
-trying the app out; for real persistent use, upgrade to a paid instance
-type and add a disk (mount it at e.g. `/var/data` and set `DB_PATH` to a
-file under it).
+Why Postgres instead of a local file: Render's free instance type has no
+persistent disk, and it spins down after 15 minutes idle — so anything
+written to local disk (like a SQLite file) is gone the next time it wakes
+up or redeploys. A hosted Postgres database keeps your data regardless of
+what happens to the web service's container.
 
 ## Project layout
 
 ```
 server/
   index.js          Express app entrypoint
-  db/               SQLite connection + schema.sql
+  db/               Postgres pool + schema.sql
   routes/           auth, groups, expenses, users, settlements, activity, dashboard
   middleware/auth.js JWT auth middleware
-  utils/            money math, split calculation, balance/debt-simplification logic
+  utils/            money math, split calculation, balance/debt-simplification logic, fx rates
 public/
   index.html
   css/style.css

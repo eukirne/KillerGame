@@ -4,6 +4,7 @@ const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 
+const db = require('./db/db');
 const authRoutes = require('./routes/auth');
 const groupRoutes = require('./routes/groups');
 const expenseRoutes = require('./routes/expenses');
@@ -44,6 +45,13 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-app.listen(PORT, () => {
-  console.log(`SplitShare server running at http://localhost:${PORT}`);
-});
+db.init()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`SplitShare server running at http://localhost:${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error('Failed to initialize database:', err);
+    process.exit(1);
+  });
