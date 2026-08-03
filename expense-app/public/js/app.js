@@ -21,6 +21,7 @@ const App = (() => {
     wireAuthForms();
     wireShell();
     wireGoogleSignIn();
+    wireNavDropdown();
 
     const token = Api.getToken();
     if (!token) {
@@ -133,6 +134,36 @@ const App = (() => {
     });
   }
 
+  function wireNavDropdown() {
+    const toggle = document.getElementById('nav-dropdown-toggle');
+    const menu = document.getElementById('side-nav');
+    if (!toggle || !menu) return;
+
+    const close = () => {
+      menu.classList.remove('open');
+      toggle.setAttribute('aria-expanded', 'false');
+    };
+    const open = () => {
+      menu.classList.add('open');
+      toggle.setAttribute('aria-expanded', 'true');
+    };
+
+    toggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (menu.classList.contains('open')) close();
+      else open();
+    });
+    menu.addEventListener('click', (e) => {
+      if (e.target.tagName === 'A') close();
+    });
+    document.addEventListener('click', (e) => {
+      if (!menu.contains(e.target) && e.target !== toggle && !toggle.contains(e.target)) close();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') close();
+    });
+  }
+
   function wireShell() {
     document.getElementById('logout-btn').addEventListener('click', () => {
       Api.setToken(null);
@@ -153,7 +184,12 @@ const App = (() => {
     currentRoute = hash;
     const root = document.getElementById('view-root');
 
-    document.querySelectorAll('.side-nav a').forEach((a) => a.classList.toggle('active', a.dataset.route === parts[0]));
+    const dropdownLabel = document.getElementById('nav-dropdown-label');
+    document.querySelectorAll('.side-nav a').forEach((a) => {
+      const isActive = a.dataset.route === parts[0];
+      a.classList.toggle('active', isActive);
+      if (isActive && dropdownLabel) dropdownLabel.textContent = a.textContent;
+    });
 
     try {
       if (parts[0] === 'dashboard') {
