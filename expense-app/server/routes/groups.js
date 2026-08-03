@@ -1,7 +1,7 @@
 const express = require('express');
 const db = require('../db/db');
 const { requireAuth } = require('../middleware/auth');
-const { publicUser, getUserById, getUserByEmail, ensureFriendship, isGroupMember, getGroupMemberIds } = require('../utils/helpers');
+const { publicUser, getUserById, getUserByEmail, ensureFriendship, areFriends, isGroupMember, getGroupMemberIds } = require('../utils/helpers');
 const { getGroupNetPositions, getGroupPairwiseBalances, simplifyDebts, fromCents } = require('../utils/balances');
 const asyncHandler = require('../utils/asyncHandler');
 
@@ -41,10 +41,10 @@ router.post(
   '/',
   requireAuth,
   asyncHandler(async (req, res) => {
-    const { name, type, memberEmails } = req.body || {};
+    const { name, type, memberIds, memberEmails } = req.body || {};
     if (!name || !name.trim()) return res.status(400).json({ error: 'Group name is required' });
 
-    const { groupId, invited, notFound } = await db.transaction(async (tx) => {
+    const { groupId, invited, notFriends, notFound } = await db.transaction(async (tx) => {
       const result = await tx.run('INSERT INTO groups (name, type, created_by) VALUES (?, ?, ?) RETURNING id', [
         name.trim(),
         type || 'other',
@@ -54,7 +54,22 @@ router.post(
       await tx.run('INSERT INTO group_members (group_id, user_id) VALUES (?, ?)', [groupId, req.userId]);
 
       const invited = [];
+      const notFriends = [];
       const notFound = [];
+
+      for (const rawId of memberIds || []) {
+        const id = Number(rawId);
+        if (!id || id === req.userId) continue;
+        if (!(await areFriends(req.userId, id, tx))) {
+          notFriends.push(id);
+          continue;
+        }
+        const user = await getUserById(id, tx);
+        if (!user) continue;
+        await tx.run('INSERT INTO group_members (group_id, user_id) VALUES (?, ?) ON CONFLICT DO NOTHING', [groupId, id]);
+        invited.push(publicUser(user));
+      }
+
       for (const rawEmail of memberEmails || []) {
         const email = String(rawEmail).trim().toLowerCase();
         if (!email) continue;
@@ -64,14 +79,21 @@ router.post(
           continue;
         }
         await tx.run('INSERT INTO group_members (group_id, user_id) VALUES (?, ?) ON CONFLICT DO NOTHING', [groupId, user.id]);
-        await ensureFriendship(req.userId, user.id, tx);
         invited.push(publicUser(user));
       }
-      return { groupId, invited, notFound };
+
+      // Everyone in a fresh group already shares this mutual context, so
+      // friend every pair instantly rather than requiring requests.
+      const allIds = [req.userId, ...invited.map((u) => u.id)];
+      for (let i = 0; i < allIds.length; i++) {
+        for (let j = i + 1; j < allIds.length; j++) await ensureFriendship(allIds[i], allIds[j], tx);
+      }
+
+      return { groupId, invited, notFriends, notFound };
     });
 
     const group = await db.get('SELECT * FROM groups WHERE id = ?', [groupId]);
-    res.status(201).json({ group: await groupSummary(group, req.userId), invited, notFound });
+    res.status(201).json({ group: await groupSummary(group, req.userId), invited, notFriends, notFound });
   })
 );
 
@@ -144,15 +166,41 @@ router.post(
     if (!group) return res.status(404).json({ error: 'Group not found' });
     if (!(await isGroupMember(groupId, req.userId))) return res.status(403).json({ error: 'Not a member of this group' });
 
-    const { email } = req.body || {};
-    const user = await getUserByEmail(email || '');
-    if (!user) return res.status(404).json({ error: 'No user found with that email' });
+    const { userIds, email } = req.body || {};
+    const existingMemberIds = await getGroupMemberIds(groupId);
+    const added = [];
+    const notFriends = [];
 
-    await db.run('INSERT INTO group_members (group_id, user_id) VALUES (?, ?) ON CONFLICT DO NOTHING', [groupId, user.id]);
-    const memberIds = await getGroupMemberIds(groupId);
-    for (const id of memberIds) await ensureFriendship(id, user.id);
+    if (Array.isArray(userIds) && userIds.length) {
+      for (const rawId of userIds) {
+        const id = Number(rawId);
+        if (!id || existingMemberIds.includes(id)) continue;
+        if (!(await areFriends(req.userId, id))) {
+          notFriends.push(id);
+          continue;
+        }
+        const user = await getUserById(id);
+        if (!user) continue;
+        await db.run('INSERT INTO group_members (group_id, user_id) VALUES (?, ?) ON CONFLICT DO NOTHING', [groupId, id]);
+        added.push(publicUser(user));
+      }
+    } else if (email) {
+      const user = await getUserByEmail(email);
+      if (!user) return res.status(404).json({ error: 'No user found with that email' });
+      await db.run('INSERT INTO group_members (group_id, user_id) VALUES (?, ?) ON CONFLICT DO NOTHING', [groupId, user.id]);
+      added.push(publicUser(user));
+    } else {
+      return res.status(400).json({ error: 'Provide userIds or an email' });
+    }
 
-    res.status(201).json({ member: publicUser(user) });
+    if (added.length) {
+      const allMemberIds = [...existingMemberIds, ...added.map((u) => u.id)];
+      for (let i = 0; i < allMemberIds.length; i++) {
+        for (let j = i + 1; j < allMemberIds.length; j++) await ensureFriendship(allMemberIds[i], allMemberIds[j]);
+      }
+    }
+
+    res.status(201).json({ added, notFriends });
   })
 );
 

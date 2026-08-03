@@ -7,6 +7,11 @@ expenses with flexible splitting, track who owes whom, and settle up.
 
 - Email/password accounts (JWT auth), plus optional **Sign in with Google**
 - Groups (roommates, trips, etc.) and one-off friend expenses
+- **Friend requests**: adding a friend by email sends a request they have to
+  accept (with a badge/notification on the Friends tab); group invites pick
+  from your accepted friends instead of typing emails. Sharing a group or a
+  direct expense still friends people instantly, since that context is
+  already mutual
 - Split expenses **equally**, by **exact amounts**, by **percentage**, or by
   **shares** — cent-accurate, remainders distributed the same way Splitwise
   does

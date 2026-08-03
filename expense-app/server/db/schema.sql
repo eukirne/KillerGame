@@ -29,14 +29,51 @@ CREATE TABLE IF NOT EXISTS group_members (
   PRIMARY KEY (group_id, user_id)
 );
 
--- Friendships: created implicitly, but we keep an explicit table so
--- "friends" (people you've shared an expense/group with) are listed
--- even before any group exists between them.
+-- Friendships: a request/accept model. Sharing a group or a direct expense
+-- auto-creates an already-'accepted' row (no request needed — you're
+-- already in a mutual context); the explicit "Add friend" flow creates a
+-- 'pending' row that the addressee must accept.
+--
+-- The next block migrates the old always-mutual, one-row-per-direction
+-- table (user_id, friend_id) that predates the request/accept model. It
+-- only runs when that old shape is detected, so it's a no-op on fresh
+-- databases and on databases already migrated.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'friendships' AND column_name = 'user_id'
+  ) THEN
+    ALTER TABLE friendships RENAME TO friendships_old;
+
+    CREATE TABLE friendships (
+      id SERIAL PRIMARY KEY,
+      requester_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      addressee_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      responded_at TIMESTAMPTZ,
+      UNIQUE (requester_id, addressee_id)
+    );
+
+    INSERT INTO friendships (requester_id, addressee_id, status, responded_at)
+    SELECT LEAST(user_id, friend_id), GREATEST(user_id, friend_id), 'accepted', NOW()
+    FROM friendships_old
+    WHERE user_id < friend_id
+    ON CONFLICT DO NOTHING;
+
+    DROP TABLE friendships_old;
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS friendships (
-  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  friend_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id SERIAL PRIMARY KEY,
+  requester_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  addressee_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'pending',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  PRIMARY KEY (user_id, friend_id)
+  responded_at TIMESTAMPTZ,
+  UNIQUE (requester_id, addressee_id)
 );
 
 CREATE TABLE IF NOT EXISTS expenses (
@@ -98,3 +135,5 @@ CREATE INDEX IF NOT EXISTS idx_expense_shares_expense ON expense_shares(expense_
 CREATE INDEX IF NOT EXISTS idx_expense_shares_user ON expense_shares(user_id);
 CREATE INDEX IF NOT EXISTS idx_settlements_group ON settlements(group_id);
 CREATE INDEX IF NOT EXISTS idx_group_members_user ON group_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_friendships_addressee ON friendships(addressee_id, status);
+CREATE INDEX IF NOT EXISTS idx_friendships_requester ON friendships(requester_id, status);

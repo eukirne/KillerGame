@@ -17,11 +17,35 @@ async function getUserByEmail(email, conn = db) {
   return conn.get('SELECT * FROM users WHERE email = ?', [String(email).toLowerCase()]);
 }
 
+// The one friendships row for a pair, regardless of who is requester/addressee.
+async function getFriendshipRow(userIdA, userIdB, conn = db) {
+  return conn.get(
+    'SELECT * FROM friendships WHERE (requester_id = ? AND addressee_id = ?) OR (requester_id = ? AND addressee_id = ?)',
+    [userIdA, userIdB, userIdB, userIdA]
+  );
+}
+
+async function areFriends(userIdA, userIdB, conn = db) {
+  const row = await getFriendshipRow(userIdA, userIdB, conn);
+  return !!row && row.status === 'accepted';
+}
+
+// Used by flows where friendship is a side effect of an already-mutual
+// context (sharing a group or a direct expense) — always instantly
+// 'accepted', no request/accept step, unlike the explicit "Add friend" flow.
 async function ensureFriendship(userIdA, userIdB, conn = db) {
   if (userIdA === userIdB) return;
-  const sql = 'INSERT INTO friendships (user_id, friend_id) VALUES (?, ?) ON CONFLICT DO NOTHING';
-  await conn.run(sql, [userIdA, userIdB]);
-  await conn.run(sql, [userIdB, userIdA]);
+  const existing = await getFriendshipRow(userIdA, userIdB, conn);
+  if (existing) {
+    if (existing.status !== 'accepted') {
+      await conn.run("UPDATE friendships SET status = 'accepted', responded_at = NOW() WHERE id = ?", [existing.id]);
+    }
+    return;
+  }
+  await conn.run("INSERT INTO friendships (requester_id, addressee_id, status, responded_at) VALUES (?, ?, 'accepted', NOW())", [
+    userIdA,
+    userIdB,
+  ]);
 }
 
 async function isGroupMember(groupId, userId, conn = db) {
@@ -34,4 +58,13 @@ async function getGroupMemberIds(groupId, conn = db) {
   return rows.map((r) => r.user_id);
 }
 
-module.exports = { publicUser, getUserById, getUserByEmail, ensureFriendship, isGroupMember, getGroupMemberIds };
+module.exports = {
+  publicUser,
+  getUserById,
+  getUserByEmail,
+  ensureFriendship,
+  getFriendshipRow,
+  areFriends,
+  isGroupMember,
+  getGroupMemberIds,
+};

@@ -103,6 +103,7 @@ input:focus, select:focus { outline: 2px solid var(--primary); outline-offset: -
 .btn-secondary:hover { filter: brightness(0.97); }
 .btn-danger { background: #fdecea; color: var(--danger); }
 .btn-tiny { padding: 4px 10px; font-size: 12px; background: var(--primary); color: #fff; }
+.btn-tiny.btn-ghost { background: #eef2f5; color: var(--text-muted); }
 .btn-block { width: 100%; }
 .btn-link { background: none; border: none; color: var(--text-muted); font-size: 13px; cursor: pointer; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -123,9 +124,24 @@ input:focus, select:focus { outline: 2px solid var(--primary); outline-offset: -
 .nav-dropdown { display: contents; }
 .nav-dropdown-toggle { display: none; }
 .side-nav { display: flex; flex-direction: column; gap: 2px; margin-bottom: 20px; }
-.side-nav a { padding: 10px 12px; border-radius: 8px; color: #b7d9d1; font-weight: 600; font-size: 14px; }
+.side-nav a { padding: 10px 12px; border-radius: 8px; color: #b7d9d1; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .side-nav a:hover { background: rgba(255,255,255,0.06); color: #fff; }
 .side-nav a.active { background: var(--primary); color: #06251f; }
+.nav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+.side-nav a.active .nav-badge { background: #fff; color: var(--primary-dark); }
 .mobile-nav-footer { display: none; }
 .add-expense-fab { margin-bottom: auto; }
 .side-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1); }
@@ -165,6 +181,7 @@ input:focus, select:focus { outline: 2px solid var(--primary); outline-offset: -
 .panel { background: var(--card); border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow); margin-bottom: 16px; }
 .panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 .panel-header h3 { font-size: 15px; margin: 0; }
+.panel-subheading { font-size: 15px; margin: 0 0 10px; }
 .panel-link { font-size: 13px; color: var(--primary-dark); font-weight: 600; }
 .panel-subsection { margin-top: 18px; }
 .panel-subsection h4 { font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; margin: 0 0 8px; }
@@ -265,6 +282,24 @@ input:focus, select:focus { outline: 2px solid var(--primary); outline-offset: -
 .participant-input { width: 90px; flex-shrink: 0; }
 .participant-computed { width: 90px; text-align: right; color: var(--text-muted); font-weight: 700; }
 .unit { color: var(--text-muted); font-size: 12px; }
+
+.friends-picker { max-height: 220px; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; padding: 4px 12px; }
+.field label.friends-picker-row,
+.friends-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--text);
+  cursor: pointer;
+}
+.friends-picker-row:last-child { border-bottom: none; }
+.friends-picker-row input[type="checkbox"] { width: auto; flex-shrink: 0; }
 .split-summary { font-size: 12px; color: var(--text-muted); margin-top: 10px; text-align: right; }
 
 /* ---------- Toast ---------- */
@@ -366,6 +401,7 @@ input:focus, select:focus { outline: 2px solid var(--primary); outline-offset: -
   }
   input, select { background: #131a20; color: var(--text); border-color: var(--border); }
   .btn-secondary { background: #232d36; color: var(--text); }
+  .btn-tiny.btn-ghost { background: #232d36; color: var(--text-muted); }
   .list-row:hover { background: #1f2933; }
   .split-tab { background: #232d36; color: var(--text-muted); }
   .auth-error { background: #3a1f1f; color: #ff9b93; }

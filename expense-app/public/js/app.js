@@ -25,6 +25,22 @@ const App = (() => {
     showAuthScreen();
   }
 
+  async function refreshFriendBadge() {
+    const badge = document.getElementById('friends-badge');
+    if (!badge) return;
+    try {
+      const { requests } = await Api.get('/users/friend-requests');
+      if (requests.length) {
+        badge.textContent = requests.length;
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+    } catch (e) {
+      // non-critical — leave the badge as-is
+    }
+  }
+
   async function boot() {
     wireAuthForms();
     wireShell();
@@ -41,6 +57,7 @@ const App = (() => {
       currentUser = user;
       showApp();
       renderUserChip();
+      refreshFriendBadge();
       window.addEventListener('hashchange', route);
       route();
     } catch (e) {
@@ -54,6 +71,7 @@ const App = (() => {
     currentUser = user;
     showApp();
     renderUserChip();
+    refreshFriendBadge();
     window.addEventListener('hashchange', route);
     location.hash = '#/dashboard';
     route();
@@ -195,6 +213,7 @@ const App = (() => {
     const root = document.getElementById('view-root');
 
     document.querySelectorAll('.side-nav a').forEach((a) => a.classList.toggle('active', a.dataset.route === parts[0]));
+    refreshFriendBadge();
 
     try {
       if (parts[0] === 'dashboard') {
@@ -240,6 +259,7 @@ const App = (() => {
   return {
     boot,
     refreshCurrentView,
+    refreshFriendBadge,
     get currentUser() {
       return currentUser;
     },

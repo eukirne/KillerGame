@@ -50,7 +50,7 @@ const Views = (() => {
         </section>
         <section class="panel">
           <div class="panel-header"><h3>Friends</h3><a href="#/friends" class="panel-link">See all</a></div>
-          ${friends.length === 0 ? emptyState('No friends yet', 'Add a friend by email to split an expense with them.') : friendList(friends)}
+          ${friends.length === 0 ? emptyState('No friends yet', 'Add a friend by email — once they accept, you can split expenses together.') : friendList(friends)}
         </section>
       </div>
 
@@ -184,7 +184,9 @@ const Views = (() => {
     );
 
     document.getElementById('group-add-expense-btn').addEventListener('click', () => ExpenseFlow.openForGroup(id));
-    document.getElementById('group-invite-btn').addEventListener('click', () => openInviteModal(id));
+    document.getElementById('group-invite-btn').addEventListener('click', () =>
+      openInviteModal(id, group.members.map((m) => m.id))
+    );
 
     root.querySelectorAll('[data-expense-id]').forEach((row) =>
       row.addEventListener('click', () => openExpenseDetail(Number(row.dataset.expenseId), group.members))
@@ -255,24 +257,55 @@ const Views = (() => {
     `;
   }
 
-  async function openInviteModal(groupId) {
+  async function friendsPickerHtml(excludeIds = []) {
+    const { friends } = await Api.get('/users/friends');
+    const eligible = friends.filter((f) => !excludeIds.includes(f.id));
+    if (eligible.length === 0) {
+      return `<div class="empty-body">No friends to add yet — send a friend request first, or use the email option below.</div>`;
+    }
+    return `<div class="friends-picker">${eligible
+      .map(
+        (f) => `
+      <label class="friends-picker-row">
+        <input type="checkbox" value="${f.id}" class="friend-picker-check"/>
+        ${avatar(f, 'sm')}
+        <span class="list-main"><span class="list-title">${Fmt.escapeHtml(f.name)}</span><span class="list-sub">${Fmt.escapeHtml(f.email)}</span></span>
+      </label>`
+      )
+      .join('')}</div>`;
+  }
+
+  function wireEmailFallbackToggle() {
+    const toggle = document.getElementById('toggle-email-invite');
+    const field = document.getElementById('email-invite-field');
+    if (!toggle || !field) return;
+    toggle.addEventListener('click', () => field.classList.toggle('hidden'));
+  }
+
+  async function openInviteModal(groupId, existingMemberIds) {
+    const pickerHtml = await friendsPickerHtml(existingMemberIds);
     Modal.open(`
       <h2>Add a member</h2>
       <div id="invite-error" class="auth-error hidden"></div>
-      <div class="field"><label>Email address</label><input type="email" id="invite-email" placeholder="friend@example.com"/></div>
+      <div class="field"><label>Friends</label>${pickerHtml}</div>
+      <button type="button" class="btn-link" id="toggle-email-invite">Invite by email instead</button>
+      <div class="field hidden" id="email-invite-field"><label>Email address</label><input type="email" id="invite-email" placeholder="friend@example.com"/></div>
       <button class="btn btn-primary btn-block" id="invite-submit">Add to group</button>
     `);
+    wireEmailFallbackToggle();
     document.getElementById('invite-submit').addEventListener('click', async () => {
+      const userIds = Array.from(document.querySelectorAll('.friend-picker-check:checked')).map((el) => Number(el.value));
       const email = document.getElementById('invite-email').value.trim();
+      if (!userIds.length && !email) {
+        return showFieldError('invite-error', 'Select at least one friend, or enter an email');
+      }
       try {
-        await Api.post(`/groups/${groupId}/members`, { email });
+        await Api.post(`/groups/${groupId}/members`, userIds.length ? { userIds } : { email });
         Modal.close();
         Toast.show('Member added');
         App.refreshCurrentView();
       } catch (e) {
-        const el = document.getElementById('invite-error');
-        el.textContent = e.message;
-        el.classList.remove('hidden');
+        showFieldError('invite-error', e.message);
       }
     });
   }
@@ -327,8 +360,58 @@ const Views = (() => {
   // ---------- Friends ----------
   async function friends(root) {
     root.innerHTML = `<div class="skeleton">Loading…</div>`;
-    const { friends } = await Api.get('/users/friends');
-    root.innerHTML = `<section class="panel">${friends.length === 0 ? emptyState('No friends yet', 'Add a friend by email to split an expense with them.') : friendList(friends)}</section>`;
+    const [{ friends }, { requests }] = await Promise.all([Api.get('/users/friends'), Api.get('/users/friend-requests')]);
+
+    root.innerHTML = `
+      ${requests.length ? `<section class="panel">${friendRequestsPanel(requests)}</section>` : ''}
+      <section class="panel">${friends.length === 0 ? emptyState('No friends yet', 'Add a friend by email — once they accept, you can split expenses together.') : friendList(friends)}</section>
+    `;
+    wireFriendRequestActions(root);
+  }
+
+  function friendRequestsPanel(requests) {
+    return `
+      <h3 class="panel-subheading">Friend requests</h3>
+      <div class="list">
+        ${requests
+          .map(
+            (r) => `
+          <div class="list-row">
+            ${avatar(r.from, 'sm')}
+            <span class="list-main"><span class="list-title">${Fmt.escapeHtml(r.from.name)}</span><span class="list-sub">${Fmt.escapeHtml(r.from.email)}</span></span>
+            <button class="btn btn-tiny" data-accept-request="${r.id}">Accept</button>
+            <button class="btn btn-tiny btn-ghost" data-decline-request="${r.id}">Decline</button>
+          </div>`
+          )
+          .join('')}
+      </div>
+    `;
+  }
+
+  function wireFriendRequestActions(root) {
+    root.querySelectorAll('[data-accept-request]').forEach((btn) =>
+      btn.addEventListener('click', async () => {
+        try {
+          await Api.post(`/users/friend-requests/${btn.dataset.acceptRequest}/accept`);
+          Toast.show('Friend request accepted');
+          App.refreshFriendBadge();
+          App.refreshCurrentView();
+        } catch (e) {
+          Toast.show(e.message, 'error');
+        }
+      })
+    );
+    root.querySelectorAll('[data-decline-request]').forEach((btn) =>
+      btn.addEventListener('click', async () => {
+        try {
+          await Api.post(`/users/friend-requests/${btn.dataset.declineRequest}/decline`);
+          App.refreshFriendBadge();
+          App.refreshCurrentView();
+        } catch (e) {
+          Toast.show(e.message, 'error');
+        }
+      })
+    );
   }
 
   async function friendDetail(root, id) {
@@ -402,7 +485,9 @@ const Views = (() => {
 
   // ---------- Shared modals ----------
   async function openCreateGroupModal() {
-    Modal.open(`
+    const pickerHtml = await friendsPickerHtml();
+    Modal.open(
+      `
       <h2>Create a group</h2>
       <div id="group-error" class="auth-error hidden"></div>
       <div class="field"><label>Group name</label><input type="text" id="new-group-name" placeholder="e.g. Apartment 4B"/></div>
@@ -414,23 +499,28 @@ const Views = (() => {
           <option value="other" selected>Other</option>
         </select>
       </div>
-      <div class="field"><label>Invite by email (comma separated, optional)</label><input type="text" id="new-group-emails" placeholder="a@example.com, b@example.com"/></div>
+      <div class="field"><label>Add friends</label>${pickerHtml}</div>
+      <button type="button" class="btn-link" id="toggle-email-invite">Invite by email instead</button>
+      <div class="field hidden" id="email-invite-field"><label>Invite by email (comma separated)</label><input type="text" id="new-group-emails" placeholder="a@example.com, b@example.com"/></div>
       <button class="btn btn-primary btn-block" id="new-group-submit">Create group</button>
-    `);
+    `,
+      { wide: true }
+    );
+    wireEmailFallbackToggle();
     document.getElementById('new-group-submit').addEventListener('click', async () => {
       const name = document.getElementById('new-group-name').value.trim();
       const type = document.getElementById('new-group-type').value;
-      const memberEmails = document
-        .getElementById('new-group-emails')
-        .value.split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
+      const memberIds = Array.from(document.querySelectorAll('.friend-picker-check:checked')).map((el) => Number(el.value));
+      const emailsField = document.getElementById('new-group-emails');
+      const memberEmails = emailsField
+        ? emailsField.value.split(',').map((s) => s.trim()).filter(Boolean)
+        : [];
       if (!name) {
         showFieldError('group-error', 'Please enter a group name');
         return;
       }
       try {
-        const { group, notFound } = await Api.post('/groups', { name, type, memberEmails });
+        const { group, notFound } = await Api.post('/groups', { name, type, memberIds, memberEmails });
         Modal.close();
         Toast.show('Group created');
         if (notFound && notFound.length) Toast.show(`No account found for: ${notFound.join(', ')}`, 'error');
@@ -444,16 +534,18 @@ const Views = (() => {
   async function openAddFriendModal() {
     Modal.open(`
       <h2>Add a friend</h2>
+      <p class="modal-subtitle">They'll get a friend request to accept before you can split expenses together.</p>
       <div id="friend-error" class="auth-error hidden"></div>
       <div class="field"><label>Email address</label><input type="email" id="new-friend-email" placeholder="friend@example.com"/></div>
-      <button class="btn btn-primary btn-block" id="new-friend-submit">Add friend</button>
+      <button class="btn btn-primary btn-block" id="new-friend-submit">Send friend request</button>
     `);
     document.getElementById('new-friend-submit').addEventListener('click', async () => {
       const email = document.getElementById('new-friend-email').value.trim();
       try {
-        await Api.post('/users/friends', { email });
+        const result = await Api.post('/users/friends', { email });
         Modal.close();
-        Toast.show('Friend added');
+        Toast.show(result.status === 'accepted' ? 'Friend added' : 'Friend request sent');
+        App.refreshFriendBadge();
         App.refreshCurrentView();
       } catch (e) {
         showFieldError('friend-error', e.message);
