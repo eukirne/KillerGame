@@ -45,17 +45,20 @@
 
 <div id="app-shell" class="app-shell hidden">
   <aside class="sidebar">
-    <div class="brand">Split<span>Share</span></div>
+    <a href="#/dashboard" class="brand">Split<span>Share</span></a>
     <div class="nav-dropdown">
-      <button id="nav-dropdown-toggle" class="nav-dropdown-toggle" type="button" aria-expanded="false" aria-controls="side-nav">
-        <span id="nav-dropdown-label">Dashboard</span>
-        <span class="nav-dropdown-caret" aria-hidden="true">&#9662;</span>
+      <button id="nav-dropdown-toggle" class="nav-dropdown-toggle" type="button" aria-expanded="false" aria-controls="side-nav" aria-label="Open menu">
+        <span id="nav-dropdown-icon" aria-hidden="true">&#9776;</span>
       </button>
       <nav class="side-nav" id="side-nav">
         <a href="#/dashboard" data-route="dashboard">Dashboard</a>
         <a href="#/groups" data-route="groups">Groups</a>
         <a href="#/friends" data-route="friends">Friends</a>
         <a href="#/activity" data-route="activity">Activity</a>
+        <div class="mobile-nav-footer">
+          <div id="mobile-user-chip" class="user-chip"></div>
+          <button id="mobile-logout-btn" class="btn-link">Log out</button>
+        </div>
       </nav>
     </div>
     <button id="add-expense-btn" class="btn btn-primary btn-block add-expense-fab">+ Add expense</button>

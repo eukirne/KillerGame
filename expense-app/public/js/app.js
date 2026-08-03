@@ -13,8 +13,16 @@ const App = (() => {
   }
 
   function renderUserChip() {
-    const chip = document.getElementById('user-chip');
-    chip.innerHTML = `<span class="avatar avatar-sm" style="background:${currentUser.avatarColor}">${Fmt.initials(currentUser.name)}</span><span class="user-chip-name">${Fmt.escapeHtml(currentUser.name)}</span>`;
+    const html = `<span class="avatar avatar-sm" style="background:${currentUser.avatarColor}">${Fmt.initials(currentUser.name)}</span><span class="user-chip-name">${Fmt.escapeHtml(currentUser.name)}</span>`;
+    document.getElementById('user-chip').innerHTML = html;
+    document.getElementById('mobile-user-chip').innerHTML = html;
+  }
+
+  function logout() {
+    Api.setToken(null);
+    currentUser = null;
+    location.hash = '';
+    showAuthScreen();
   }
 
   async function boot() {
@@ -134,18 +142,24 @@ const App = (() => {
     });
   }
 
+  const HAMBURGER_ICON = '☰';
+  const CLOSE_ICON = '✕';
+
   function wireNavDropdown() {
     const toggle = document.getElementById('nav-dropdown-toggle');
+    const icon = document.getElementById('nav-dropdown-icon');
     const menu = document.getElementById('side-nav');
     if (!toggle || !menu) return;
 
     const close = () => {
       menu.classList.remove('open');
       toggle.setAttribute('aria-expanded', 'false');
+      if (icon) icon.textContent = HAMBURGER_ICON;
     };
     const open = () => {
       menu.classList.add('open');
       toggle.setAttribute('aria-expanded', 'true');
+      if (icon) icon.textContent = CLOSE_ICON;
     };
 
     toggle.addEventListener('click', (e) => {
@@ -165,12 +179,8 @@ const App = (() => {
   }
 
   function wireShell() {
-    document.getElementById('logout-btn').addEventListener('click', () => {
-      Api.setToken(null);
-      currentUser = null;
-      location.hash = '';
-      showAuthScreen();
-    });
+    document.getElementById('logout-btn').addEventListener('click', logout);
+    document.getElementById('mobile-logout-btn').addEventListener('click', logout);
     document.getElementById('add-expense-btn').addEventListener('click', () => ExpenseFlow.openChooser());
     document.getElementById('new-group-btn').addEventListener('click', () => Views.openCreateGroupModal());
     document.getElementById('add-friend-btn').addEventListener('click', () => Views.openAddFriendModal());
@@ -184,12 +194,7 @@ const App = (() => {
     currentRoute = hash;
     const root = document.getElementById('view-root');
 
-    const dropdownLabel = document.getElementById('nav-dropdown-label');
-    document.querySelectorAll('.side-nav a').forEach((a) => {
-      const isActive = a.dataset.route === parts[0];
-      a.classList.toggle('active', isActive);
-      if (isActive && dropdownLabel) dropdownLabel.textContent = a.textContent;
-    });
+    document.querySelectorAll('.side-nav a').forEach((a) => a.classList.toggle('active', a.dataset.route === parts[0]));
 
     try {
       if (parts[0] === 'dashboard') {
