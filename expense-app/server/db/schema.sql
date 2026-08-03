@@ -4,10 +4,15 @@ CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
   email TEXT NOT NULL UNIQUE,
-  password_hash TEXT NOT NULL,
+  password_hash TEXT,
   avatar_color TEXT NOT NULL DEFAULT '#1cc29f',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Google-only accounts have no password; both statements are safe to
+-- re-run against a database created before Google sign-in existed.
+ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id TEXT UNIQUE;
 
 CREATE TABLE IF NOT EXISTS groups (
   id SERIAL PRIMARY KEY,

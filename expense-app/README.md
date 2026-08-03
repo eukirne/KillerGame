@@ -5,7 +5,7 @@ expenses with flexible splitting, track who owes whom, and settle up.
 
 ## Features
 
-- Email/password accounts (JWT auth)
+- Email/password accounts (JWT auth), plus optional **Sign in with Google**
 - Groups (roommates, trips, etc.) and one-off friend expenses
 - Split expenses **equally**, by **exact amounts**, by **percentage**, or by
   **shares** — cent-accurate, remainders distributed the same way Splitwise
@@ -66,6 +66,26 @@ free Postgres tier that doesn't expire and doesn't require a card:
    "Connection pooling" one if offered).
 3. Use that as `DATABASE_URL`, locally in `.env` and on Render (see below).
 
+## Enabling Google sign-in (optional)
+
+Without this, the app works fine with email/password only — the "Continue
+with Google" button just doesn't render.
+
+1. In the [Google Cloud Console](https://console.cloud.google.com/apis/credentials),
+   create a project (or use an existing one).
+2. **APIs & Services → OAuth consent screen**: set it up as **External**,
+   fill in the required fields (app name, support email). No verification
+   is needed for testing with your own Google account.
+3. **APIs & Services → Credentials → Create Credentials → OAuth client ID**
+   → application type **Web application**.
+4. Under **Authorized JavaScript origins**, add every origin you'll load the
+   app from, e.g. `http://localhost:3000` and `https://splitshare-xxxx.onrender.com`.
+   No redirect URIs are needed — this uses Google's One Tap/button flow, not
+   a redirect.
+5. Copy the generated **Client ID** (ends in `.apps.googleusercontent.com`)
+   and set it as `GOOGLE_CLIENT_ID`, locally in `.env` and on Render (see
+   below). It's a public identifier, not a secret.
+
 ## Deploying to Render (free, public URL)
 
 A `render.yaml` Blueprint lives at the repo root, so Render can deploy the
@@ -79,9 +99,10 @@ A `render.yaml` Blueprint lives at the repo root, so Render can deploy the
 3. Render finds `render.yaml` and provisions a free web service named
    `splitshare` (build: `npm install`, start: `npm start`, `JWT_SECRET`
    auto-generated). Click **Apply**.
-4. Render will prompt for the `DATABASE_URL` env var since it isn't stored
-   in git — paste in your Neon/Supabase connection string from above (or
-   add it afterwards under the service's **Environment** tab).
+4. Render will prompt for the `DATABASE_URL` (and, optionally, `GOOGLE_CLIENT_ID`)
+   env vars since they aren't stored in git — paste in your Neon/Supabase
+   connection string from above (or add them afterwards under the service's
+   **Environment** tab → **Edit**).
 5. After the build finishes (~2-3 min) Render gives you a public URL like
    `https://splitshare-xxxx.onrender.com` — open that on your phone to sign
    up and use the app.

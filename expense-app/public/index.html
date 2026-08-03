@@ -7,6 +7,7 @@
 <title>SplitShare — Share expenses, split fair</title>
 <meta name="description" content="Split bills and track shared expenses with friends, roommates and groups."/>
 <link rel="stylesheet" href="css/style.css"/>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 
 <link rel="manifest" href="/manifest.json"/>
 <link rel="icon" href="/icons/favicon-32.png" type="image/png"/>
@@ -21,6 +22,8 @@
 <div id="auth-screen" class="auth-screen hidden">
   <div class="auth-card">
     <div class="auth-brand">Split<span>Share</span></div>
+    <div id="google-signin-container" class="google-signin-container hidden"></div>
+    <div id="auth-divider" class="auth-divider hidden"><span>or</span></div>
     <div id="auth-error" class="auth-error hidden"></div>
     <form id="login-form" class="auth-form">
       <h2>Welcome back</h2>

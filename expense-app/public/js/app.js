@@ -20,6 +20,7 @@ const App = (() => {
   async function boot() {
     wireAuthForms();
     wireShell();
+    wireGoogleSignIn();
 
     const token = Api.getToken();
     if (!token) {
@@ -36,6 +37,49 @@ const App = (() => {
     } catch (e) {
       Api.setToken(null);
       showAuthScreen();
+    }
+  }
+
+  function handleAuthSuccess(token, user) {
+    Api.setToken(token);
+    currentUser = user;
+    showApp();
+    renderUserChip();
+    window.addEventListener('hashchange', route);
+    location.hash = '#/dashboard';
+    route();
+  }
+
+  async function wireGoogleSignIn() {
+    try {
+      const { googleClientId } = await Api.get('/auth/config');
+      if (!googleClientId || !window.google || !window.google.accounts) return;
+
+      window.google.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: async ({ credential }) => {
+          const errorEl = document.getElementById('auth-error');
+          errorEl.classList.add('hidden');
+          try {
+            const { token, user } = await Api.post('/auth/google', { credential });
+            handleAuthSuccess(token, user);
+          } catch (err) {
+            errorEl.textContent = err.message;
+            errorEl.classList.remove('hidden');
+          }
+        },
+      });
+      window.google.accounts.id.renderButton(document.getElementById('google-signin-container'), {
+        theme: 'outline',
+        size: 'large',
+        width: 320,
+        text: 'continue_with',
+      });
+      document.getElementById('google-signin-container').classList.remove('hidden');
+      document.getElementById('auth-divider').classList.remove('hidden');
+    } catch (e) {
+      // Google sign-in is optional — if config fetch fails or the script
+      // didn't load, the app falls back to email/password only.
     }
   }
 
@@ -65,13 +109,7 @@ const App = (() => {
           email: document.getElementById('login-email').value,
           password: document.getElementById('login-password').value,
         });
-        Api.setToken(token);
-        currentUser = user;
-        showApp();
-        renderUserChip();
-        window.addEventListener('hashchange', route);
-        location.hash = '#/dashboard';
-        route();
+        handleAuthSuccess(token, user);
       } catch (err) {
         errorEl.textContent = err.message;
         errorEl.classList.remove('hidden');
@@ -87,13 +125,7 @@ const App = (() => {
           email: document.getElementById('signup-email').value,
           password: document.getElementById('signup-password').value,
         });
-        Api.setToken(token);
-        currentUser = user;
-        showApp();
-        renderUserChip();
-        window.addEventListener('hashchange', route);
-        location.hash = '#/dashboard';
-        route();
+        handleAuthSuccess(token, user);
       } catch (err) {
         errorEl.textContent = err.message;
         errorEl.classList.remove('hidden');
