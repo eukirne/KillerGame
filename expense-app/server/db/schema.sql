@@ -77,6 +77,17 @@ CREATE TABLE IF NOT EXISTS comments (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Historical exchange rates, cached by (currency, date) so balances across
+-- mixed-currency expenses convert to USD using the rate on the expense's own
+-- date rather than today's rate.
+CREATE TABLE IF NOT EXISTS fx_rates (
+  currency TEXT NOT NULL,
+  date TEXT NOT NULL,
+  rate REAL NOT NULL,
+  fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (currency, date)
+);
+
 CREATE INDEX IF NOT EXISTS idx_expenses_group ON expenses(group_id);
 CREATE INDEX IF NOT EXISTS idx_expense_shares_expense ON expense_shares(expense_id);
 CREATE INDEX IF NOT EXISTS idx_expense_shares_user ON expense_shares(user_id);

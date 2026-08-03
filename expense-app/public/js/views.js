@@ -29,17 +29,19 @@ const Views = (() => {
       <div class="summary-row">
         <div class="summary-card">
           <div class="summary-label">You are owed</div>
-          <div class="summary-value positive">${Fmt.money(summary.totalOwedToYou, 'USD')}</div>
+          <div class="summary-value positive">${Fmt.money(summary.totalOwedToYou, summary.currency)}</div>
         </div>
         <div class="summary-card">
           <div class="summary-label">You owe</div>
-          <div class="summary-value negative">${Fmt.money(summary.totalYouOwe, 'USD')}</div>
+          <div class="summary-value negative">${Fmt.money(summary.totalYouOwe, summary.currency)}</div>
         </div>
         <div class="summary-card">
           <div class="summary-label">Net balance</div>
-          <div class="summary-value ${balanceClass(summary.netBalance)}">${Fmt.money(summary.netBalance, 'USD')}</div>
+          <div class="summary-value ${balanceClass(summary.netBalance)}">${Fmt.money(summary.netBalance, summary.currency)}</div>
         </div>
       </div>
+      <div class="fx-note">Converted to ${summary.currency} using the exchange rate on each expense's date.</div>
+
 
       <div class="dash-grid">
         <section class="panel">
@@ -241,6 +243,7 @@ const Views = (() => {
       : `<div class="empty-state">${emptyState('All settled up', 'No payments needed within this group.')}</div>`;
 
     return `
+      <div class="fx-note">Expenses in other currencies are converted to USD using the exchange rate on their date.</div>
       <div class="panel-subsection">
         <h4>Net balances</h4>
         <div class="list">${netRows}</div>

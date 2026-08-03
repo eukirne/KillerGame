@@ -3,25 +3,31 @@ const db = require('../db/db');
 const { requireAuth } = require('../middleware/auth');
 const { publicUser, getUserById, getUserByEmail, ensureFriendship } = require('../utils/helpers');
 const { getUserBalances, fromCents } = require('../utils/balances');
+const asyncHandler = require('../utils/asyncHandler');
 
 const router = express.Router();
 
-router.get('/friends', requireAuth, (req, res) => {
-  const friendIds = db
-    .prepare('SELECT friend_id FROM friendships WHERE user_id = ?')
-    .all(req.userId)
-    .map((r) => r.friend_id);
+router.get(
+  '/friends',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const friendIds = db
+      .prepare('SELECT friend_id FROM friendships WHERE user_id = ?')
+      .all(req.userId)
+      .map((r) => r.friend_id);
 
-  const balances = new Map(getUserBalances(req.userId).map((b) => [b.userId, b.netCents]));
+    const userBalances = await getUserBalances(req.userId);
+    const balances = new Map(userBalances.map((b) => [b.userId, b.netCents]));
 
-  const friends = friendIds.map((id) => ({
-    ...publicUser(getUserById(id)),
-    balance: fromCents(balances.get(id) || 0),
-  }));
-  friends.sort((a, b) => a.name.localeCompare(b.name));
+    const friends = friendIds.map((id) => ({
+      ...publicUser(getUserById(id)),
+      balance: fromCents(balances.get(id) || 0),
+    }));
+    friends.sort((a, b) => a.name.localeCompare(b.name));
 
-  res.json({ friends });
-});
+    res.json({ friends });
+  })
+);
 
 router.post('/friends', requireAuth, (req, res) => {
   const { email } = req.body || {};
