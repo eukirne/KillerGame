@@ -10,6 +10,8 @@ const ExpenseFlow = (() => {
     ['other', '📦 Other'],
   ];
 
+  const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'INR', 'MXN', 'BRL', 'CHF'];
+
   async function openChooser() {
     const [{ groups }, { friends }] = await Promise.all([Api.get('/groups'), Api.get('/users/friends')]);
     if (groups.length === 0 && friends.length === 0) {
@@ -74,7 +76,7 @@ const ExpenseFlow = (() => {
       friendId: friendId || null,
       description: expense ? expense.description : '',
       amount: expense ? expense.amount : '',
-      currency: expense ? expense.currency : 'USD',
+      currency: expense ? expense.currency : me.defaultCurrency || 'USD',
       category: expense ? expense.category : 'general',
       date: expense ? expense.date : new Date().toISOString().slice(0, 10),
       paidBy: expense ? expense.paidBy.id : me.id,
@@ -115,9 +117,7 @@ const ExpenseFlow = (() => {
           <label>Amount</label>
           <div class="amount-input">
             <select id="exp-currency">
-              <option value="USD" ${state.currency === 'USD' ? 'selected' : ''}>$</option>
-              <option value="EUR" ${state.currency === 'EUR' ? 'selected' : ''}>€</option>
-              <option value="GBP" ${state.currency === 'GBP' ? 'selected' : ''}>£</option>
+              ${CURRENCIES.map((c) => `<option value="${c}" ${state.currency === c ? 'selected' : ''}>${c}</option>`).join('')}
             </select>
             <input type="number" id="exp-amount" min="0.01" step="0.01" placeholder="0.00" value="${state.amount || ''}"/>
           </div>

@@ -30,7 +30,7 @@ function baseCents(amount, currency, date, rates) {
  * Returns [{ userId, netCents }] where netCents > 0 means the other user owes
  * the given user, and netCents < 0 means the given user owes them.
  */
-async function getUserBalances(userId) {
+async function getUserBalances(userId, targetCurrency = fx.DEFAULT_CURRENCY) {
   const shareRows = await db.all(
     `SELECT es.user_id AS ower, e.paid_by AS payer, es.amount AS amt, e.currency AS currency, e.date AS date
        FROM expense_shares es
@@ -45,10 +45,13 @@ async function getUserBalances(userId) {
     [userId, userId]
   );
 
-  const rates = await fx.getRates([
-    ...shareRows.map((r) => ({ currency: r.currency, date: r.date })),
-    ...settlementRows.map((r) => ({ currency: r.currency, date: r.date })),
-  ]);
+  const rates = await fx.getRates(
+    [
+      ...shareRows.map((r) => ({ currency: r.currency, date: r.date })),
+      ...settlementRows.map((r) => ({ currency: r.currency, date: r.date })),
+    ],
+    targetCurrency
+  );
 
   const map = new Map();
   const counterparts = new Set();
@@ -71,17 +74,17 @@ async function getUserBalances(userId) {
   return results;
 }
 
-async function getUserOverallNet(userId) {
-  const balances = await getUserBalances(userId);
+async function getUserOverallNet(userId, targetCurrency = fx.DEFAULT_CURRENCY) {
+  const balances = await getUserBalances(userId, targetCurrency);
   return balances.reduce((sum, b) => sum + b.netCents, 0);
 }
 
 /**
- * Net position of every member within a single group, in fx.BASE_CURRENCY
+ * Net position of every member within a single group, in `targetCurrency`
  * cents: positive means the group owes them money overall, negative means
  * they owe the group. Returns Map<userId, cents>.
  */
-async function getGroupNetPositions(groupId, memberIds) {
+async function getGroupNetPositions(groupId, memberIds, targetCurrency = fx.DEFAULT_CURRENCY) {
   const net = new Map(memberIds.map((id) => [id, 0]));
 
   const expenseRows = await db.all(`SELECT id, amount, paid_by, currency, date FROM expenses WHERE group_id = ? AND deleted = 0`, [
@@ -98,10 +101,13 @@ async function getGroupNetPositions(groupId, memberIds) {
 
   const settlementRows = await db.all(`SELECT from_user, to_user, amount, currency, date FROM settlements WHERE group_id = ?`, [groupId]);
 
-  const rates = await fx.getRates([
-    ...expenseRows.map((e) => ({ currency: e.currency, date: e.date })),
-    ...settlementRows.map((s) => ({ currency: s.currency, date: s.date })),
-  ]);
+  const rates = await fx.getRates(
+    [
+      ...expenseRows.map((e) => ({ currency: e.currency, date: e.date })),
+      ...settlementRows.map((s) => ({ currency: s.currency, date: s.date })),
+    ],
+    targetCurrency
+  );
 
   for (const e of expenseRows) {
     net.set(e.paid_by, (net.get(e.paid_by) || 0) + baseCents(e.amount, e.currency, e.date, rates));
@@ -121,9 +127,9 @@ async function getGroupNetPositions(groupId, memberIds) {
 
 /**
  * Pairwise "who owes whom" within a single group (not simplified) — used for
- * the group's balance breakdown list. Amounts in fx.BASE_CURRENCY cents.
+ * the group's balance breakdown list. Amounts in `targetCurrency` cents.
  */
-async function getGroupPairwiseBalances(groupId, memberIds) {
+async function getGroupPairwiseBalances(groupId, memberIds, targetCurrency = fx.DEFAULT_CURRENCY) {
   const expenseRows = await db.all(`SELECT id, paid_by, currency, date FROM expenses WHERE group_id = ? AND deleted = 0`, [groupId]);
   const expenseIds = expenseRows.map((e) => e.id);
   const expenseById = new Map(expenseRows.map((e) => [e.id, e]));
@@ -136,10 +142,13 @@ async function getGroupPairwiseBalances(groupId, memberIds) {
 
   const settlementRows = await db.all(`SELECT from_user, to_user, amount, currency, date FROM settlements WHERE group_id = ?`, [groupId]);
 
-  const rates = await fx.getRates([
-    ...expenseRows.map((e) => ({ currency: e.currency, date: e.date })),
-    ...settlementRows.map((s) => ({ currency: s.currency, date: s.date })),
-  ]);
+  const rates = await fx.getRates(
+    [
+      ...expenseRows.map((e) => ({ currency: e.currency, date: e.date })),
+      ...settlementRows.map((s) => ({ currency: s.currency, date: s.date })),
+    ],
+    targetCurrency
+  );
 
   const map = new Map();
   for (const s of shareRows) {
@@ -206,5 +215,5 @@ module.exports = {
   simplifyDebts,
   fromCents,
   toCents,
-  BASE_CURRENCY: fx.BASE_CURRENCY,
+  DEFAULT_CURRENCY: fx.DEFAULT_CURRENCY,
 };

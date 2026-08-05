@@ -148,6 +148,7 @@ input:focus, select:focus { outline: 2px solid var(--primary); outline-offset: -
 .user-chip { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
 .user-chip-name { color: #e7f7f2; }
 .side-footer .btn-link { color: #9fc9bf; }
+.footer-links { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .topbar {
@@ -268,7 +269,7 @@ input:focus, select:focus { outline: 2px solid var(--primary); outline-offset: -
 .field-row .field { flex: 1; margin-bottom: 0; }
 .field-grow { flex: 2; }
 .amount-input { display: flex; gap: 6px; }
-.amount-input select { width: 62px; flex-shrink: 0; }
+.amount-input select { width: 78px; flex-shrink: 0; }
 
 .split-tabs { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
 .split-tab { background: #eef2f5; border: none; border-radius: 20px; padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer; color: var(--text-muted); }

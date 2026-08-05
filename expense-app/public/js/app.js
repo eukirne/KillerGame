@@ -22,6 +22,9 @@ const App = (() => {
     Api.setToken(null);
     currentUser = null;
     location.hash = '';
+    document.getElementById('signup-form').classList.add('hidden');
+    document.getElementById('login-form').classList.remove('hidden');
+    document.getElementById('auth-error').classList.add('hidden');
     showAuthScreen();
   }
 
@@ -133,7 +136,7 @@ const App = (() => {
       errorEl.classList.add('hidden');
       try {
         const { token, user } = await Api.post('/auth/login', {
-          email: document.getElementById('login-email').value,
+          identifier: document.getElementById('login-identifier').value,
           password: document.getElementById('login-password').value,
         });
         handleAuthSuccess(token, user);
@@ -149,7 +152,9 @@ const App = (() => {
       try {
         const { token, user } = await Api.post('/auth/signup', {
           name: document.getElementById('signup-name').value,
+          username: document.getElementById('signup-username').value,
           email: document.getElementById('signup-email').value,
+          phone: document.getElementById('signup-phone').value,
           password: document.getElementById('signup-password').value,
         });
         handleAuthSuccess(token, user);
@@ -202,6 +207,14 @@ const App = (() => {
     document.getElementById('add-expense-btn').addEventListener('click', () => ExpenseFlow.openChooser());
     document.getElementById('new-group-btn').addEventListener('click', () => Views.openCreateGroupModal());
     document.getElementById('add-friend-btn').addEventListener('click', () => Views.openAddFriendModal());
+    document.getElementById('settings-btn').addEventListener('click', () => Views.openSettingsModal());
+    document.getElementById('mobile-settings-btn').addEventListener('click', () => Views.openSettingsModal());
+  }
+
+  function onProfileUpdated(user) {
+    currentUser = user;
+    renderUserChip();
+    refreshCurrentView();
   }
 
   const TITLES = { dashboard: 'Dashboard', groups: 'Groups', friends: 'Friends', activity: 'Activity' };
@@ -260,6 +273,7 @@ const App = (() => {
     boot,
     refreshCurrentView,
     refreshFriendBadge,
+    onProfileUpdated,
     get currentUser() {
       return currentUser;
     },

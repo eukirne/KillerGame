@@ -1,7 +1,7 @@
 const express = require('express');
 const db = require('../db/db');
 const { requireAuth } = require('../middleware/auth');
-const { publicUser, getUserById, getUserByEmail, getFriendshipRow } = require('../utils/helpers');
+const { publicUser, getUserById, getUserByIdentifier, getFriendshipRow } = require('../utils/helpers');
 const { getUserBalances, fromCents } = require('../utils/balances');
 const asyncHandler = require('../utils/asyncHandler');
 
@@ -18,7 +18,9 @@ router.get(
     );
     const friendIds = rows.map((r) => (r.requester_id === req.userId ? r.addressee_id : r.requester_id));
 
-    const userBalances = await getUserBalances(req.userId);
+    const me = await getUserById(req.userId);
+    const currency = me.default_currency;
+    const userBalances = await getUserBalances(req.userId, currency);
     const balances = new Map(userBalances.map((b) => [b.userId, b.netCents]));
 
     const friends = await Promise.all(
@@ -29,7 +31,7 @@ router.get(
     );
     friends.sort((a, b) => a.name.localeCompare(b.name));
 
-    res.json({ friends });
+    res.json({ friends, currency });
   })
 );
 
@@ -57,9 +59,9 @@ router.post(
   '/friends',
   requireAuth,
   asyncHandler(async (req, res) => {
-    const { email } = req.body || {};
-    const user = await getUserByEmail(email || '');
-    if (!user) return res.status(404).json({ error: 'No user found with that email' });
+    const { identifier } = req.body || {};
+    const user = await getUserByIdentifier(identifier || '');
+    if (!user) return res.status(404).json({ error: 'No user found with that username, email or phone number' });
     if (user.id === req.userId) return res.status(400).json({ error: "You can't add yourself as a friend" });
 
     const existing = await getFriendshipRow(req.userId, user.id);
@@ -111,9 +113,9 @@ router.get(
   '/search',
   requireAuth,
   asyncHandler(async (req, res) => {
-    const { email } = req.query;
-    if (!email) return res.status(400).json({ error: 'email query param is required' });
-    const user = await getUserByEmail(email);
+    const { q } = req.query;
+    if (!q) return res.status(400).json({ error: 'q query param is required' });
+    const user = await getUserByIdentifier(q);
     res.json({ user: user ? publicUser(user) : null });
   })
 );

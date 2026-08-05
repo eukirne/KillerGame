@@ -3,7 +3,7 @@
 CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
-  email TEXT NOT NULL UNIQUE,
+  email TEXT UNIQUE,
   password_hash TEXT,
   avatar_color TEXT NOT NULL DEFAULT '#1cc29f',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -13,6 +13,23 @@ CREATE TABLE IF NOT EXISTS users (
 -- re-run against a database created before Google sign-in existed.
 ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id TEXT UNIQUE;
+
+-- Sign up with a username plus email and/or phone (at least one of the
+-- latter two) rather than requiring email specifically.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS default_currency TEXT NOT NULL DEFAULT 'USD';
+ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
+
+-- Backfill a unique username for any row that predates this column
+-- (a no-op once every row has one).
+UPDATE users
+SET username = LOWER(REGEXP_REPLACE(COALESCE(NULLIF(SPLIT_PART(email, '@', 1), ''), 'user'), '[^a-z0-9_]', '', 'g')) || '_' || id
+WHERE username IS NULL;
+
+ALTER TABLE users ALTER COLUMN username SET NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone ON users(phone) WHERE phone IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS groups (
   id SERIAL PRIMARY KEY,

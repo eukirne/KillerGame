@@ -5,20 +5,26 @@ expenses with flexible splitting, track who owes whom, and settle up.
 
 ## Features
 
-- Email/password accounts (JWT auth), plus optional **Sign in with Google**
+- Sign up with a **username plus email and/or phone** (any combination, as
+  long as you provide at least one contact method), or **Sign in with
+  Google**. Log in, search for people, and send friend requests using
+  whichever identifier you have — username, email, or phone
 - Groups (roommates, trips, etc.) and one-off friend expenses
-- **Friend requests**: adding a friend by email sends a request they have to
-  accept (with a badge/notification on the Friends tab); group invites pick
-  from your accepted friends instead of typing emails. Sharing a group or a
+- **Friend requests**: adding a friend sends a request they have to accept
+  (with a badge/notification on the Friends tab); group invites pick from
+  your accepted friends instead of typing emails. Sharing a group or a
   direct expense still friends people instantly, since that context is
   already mutual
 - Split expenses **equally**, by **exact amounts**, by **percentage**, or by
   **shares** — cent-accurate, remainders distributed the same way Splitwise
   does
-- Automatic balance tracking, per group and per friend — expenses in other
-  currencies are converted to USD using the historical exchange rate on the
-  expense's own date (not today's rate), so mixed-currency balances combine
-  correctly instead of adding 1:1
+- **Settings**: set your default currency and update your username, email,
+  or phone at any time (each checked for uniqueness across the system)
+- Automatic balance tracking, per group and per friend — converted to
+  *your own* default currency using the historical exchange rate on each
+  expense's date, so two people can view the very same shared debt in their
+  own preferred currencies, and mixed-currency balances combine correctly
+  instead of adding 1:1
 - **Simplified debts**: minimal-transaction suggestions for settling up a
   group (same greedy algorithm Splitwise uses)
 - Settle-up payments, expense comments, and an activity feed

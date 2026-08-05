@@ -1,4 +1,6 @@
 const Views = (() => {
+  const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'INR', 'MXN', 'BRL', 'CHF'];
+
   function balanceClass(amount) {
     if (amount > 0.004) return 'positive';
     if (amount < -0.004) return 'negative';
@@ -50,7 +52,7 @@ const Views = (() => {
         </section>
         <section class="panel">
           <div class="panel-header"><h3>Friends</h3><a href="#/friends" class="panel-link">See all</a></div>
-          ${friends.length === 0 ? emptyState('No friends yet', 'Add a friend by email — once they accept, you can split expenses together.') : friendList(friends)}
+          ${friends.length === 0 ? emptyState('No friends yet', 'Add a friend by email — once they accept, you can split expenses together.') : friendList(friends, summary.currency)}
         </section>
       </div>
 
@@ -77,13 +79,13 @@ const Views = (() => {
           <span class="list-title">${Fmt.escapeHtml(g.name)}</span>
           <span class="list-sub">${g.members.length} ${g.members.length === 1 ? 'member' : 'members'}</span>
         </span>
-        <span class="list-balance ${balanceClass(g.yourBalanceCents / 100)}">${balanceLabel(g.yourBalanceCents / 100, 'USD')}</span>
+        <span class="list-balance ${balanceClass(g.yourBalanceCents / 100)}">${balanceLabel(g.yourBalanceCents / 100, g.currency)}</span>
       </a>`
       )
       .join('')}</div>`;
   }
 
-  function friendList(friends) {
+  function friendList(friends, currency) {
     return `<div class="list">${friends
       .map(
         (f) => `
@@ -91,9 +93,9 @@ const Views = (() => {
         ${avatar(f)}
         <span class="list-main">
           <span class="list-title">${Fmt.escapeHtml(f.name)}</span>
-          <span class="list-sub">${Fmt.escapeHtml(f.email)}</span>
+          <span class="list-sub">${Fmt.escapeHtml(f.username ? '@' + f.username : f.email || '')}</span>
         </span>
-        <span class="list-balance ${balanceClass(f.balance)}">${balanceLabel(f.balance, 'USD')}</span>
+        <span class="list-balance ${balanceClass(f.balance)}">${balanceLabel(f.balance, currency)}</span>
       </a>`
       )
       .join('')}</div>`;
@@ -145,7 +147,7 @@ const Views = (() => {
   // ---------- Group detail ----------
   async function groupDetail(root, id) {
     root.innerHTML = `<div class="skeleton">Loading…</div>`;
-    const [{ group, netBalances, pairwiseBalances, simplifiedDebts }, { expenses }] = await Promise.all([
+    const [{ group, netBalances, pairwiseBalances, simplifiedDebts, currency }, { expenses }] = await Promise.all([
       Api.get(`/groups/${id}`),
       Api.get(`/expenses?groupId=${id}`),
     ]);
@@ -171,7 +173,7 @@ const Views = (() => {
         ${expenses.length === 0 ? emptyState('No expenses yet', 'Add the first expense for this group.') : expensesList(expenses)}
       </div>
       <div id="tab-balances" class="tab-panel hidden">
-        ${balancesPanel(group, netBalances, pairwiseBalances, simplifiedDebts, id)}
+        ${balancesPanel(group, netBalances, pairwiseBalances, simplifiedDebts, id, currency)}
       </div>
     `;
 
@@ -194,7 +196,7 @@ const Views = (() => {
     root.querySelectorAll('[data-settle]').forEach((btn) =>
       btn.addEventListener('click', () => {
         const [fromId, toId, amount] = btn.dataset.settle.split('|');
-        openSettleModal({ groupId: id, fromId: Number(fromId), toId: Number(toId), amount: Number(amount), members: group.members });
+        openSettleModal({ groupId: id, fromId: Number(fromId), toId: Number(toId), amount: Number(amount), members: group.members, currency });
       })
     );
   }
@@ -219,7 +221,7 @@ const Views = (() => {
     return { food: '🍔', home: '🏠', transport: '🚗', utilities: '💡', entertainment: '🎬', travel: '✈️', general: '🧾', other: '📦' }[cat] || '🧾';
   }
 
-  function balancesPanel(group, netBalances, pairwiseBalances, simplifiedDebts, groupId) {
+  function balancesPanel(group, netBalances, pairwiseBalances, simplifiedDebts, groupId, currency) {
     const byId = Object.fromEntries(group.members.map((m) => [m.id, m]));
     const netRows = group.members
       .map((m) => {
@@ -227,7 +229,7 @@ const Views = (() => {
         return `<div class="list-row">
           ${avatar(m, 'sm')}
           <span class="list-main"><span class="list-title">${Fmt.escapeHtml(m.name)}</span></span>
-          <span class="list-balance ${balanceClass(amt)}">${amt >= 0 ? 'gets back ' : 'owes '}${Fmt.money(Math.abs(amt), 'USD')}</span>
+          <span class="list-balance ${balanceClass(amt)}">${amt >= 0 ? 'gets back ' : 'owes '}${Fmt.money(Math.abs(amt), currency)}</span>
         </div>`;
       })
       .join('');
@@ -237,7 +239,7 @@ const Views = (() => {
           .map(
             (t) => `<div class="list-row">
         <span class="list-main"><span class="list-title">${Fmt.escapeHtml(t.from.name)} → ${Fmt.escapeHtml(t.to.name)}</span></span>
-        <span class="list-balance negative">${Fmt.money(t.amount, 'USD')}</span>
+        <span class="list-balance negative">${Fmt.money(t.amount, currency)}</span>
         <button class="btn btn-tiny" data-settle="${t.from.id}|${t.to.id}|${t.amount}">Settle</button>
       </div>`
           )
@@ -245,7 +247,7 @@ const Views = (() => {
       : `<div class="empty-state">${emptyState('All settled up', 'No payments needed within this group.')}</div>`;
 
     return `
-      <div class="fx-note">Expenses in other currencies are converted to USD using the exchange rate on their date.</div>
+      <div class="fx-note">Expenses in other currencies are converted to ${currency} using the exchange rate on their date.</div>
       <div class="panel-subsection">
         <h4>Net balances</h4>
         <div class="list">${netRows}</div>
@@ -269,7 +271,7 @@ const Views = (() => {
       <label class="friends-picker-row">
         <input type="checkbox" value="${f.id}" class="friend-picker-check"/>
         ${avatar(f, 'sm')}
-        <span class="list-main"><span class="list-title">${Fmt.escapeHtml(f.name)}</span><span class="list-sub">${Fmt.escapeHtml(f.email)}</span></span>
+        <span class="list-main"><span class="list-title">${Fmt.escapeHtml(f.name)}</span><span class="list-sub">${Fmt.escapeHtml(f.username ? '@' + f.username : f.email || '')}</span></span>
       </label>`
       )
       .join('')}</div>`;
@@ -360,11 +362,11 @@ const Views = (() => {
   // ---------- Friends ----------
   async function friends(root) {
     root.innerHTML = `<div class="skeleton">Loading…</div>`;
-    const [{ friends }, { requests }] = await Promise.all([Api.get('/users/friends'), Api.get('/users/friend-requests')]);
+    const [{ friends, currency }, { requests }] = await Promise.all([Api.get('/users/friends'), Api.get('/users/friend-requests')]);
 
     root.innerHTML = `
       ${requests.length ? `<section class="panel">${friendRequestsPanel(requests)}</section>` : ''}
-      <section class="panel">${friends.length === 0 ? emptyState('No friends yet', 'Add a friend by email — once they accept, you can split expenses together.') : friendList(friends)}</section>
+      <section class="panel">${friends.length === 0 ? emptyState('No friends yet', 'Add a friend by email — once they accept, you can split expenses together.') : friendList(friends, currency)}</section>
     `;
     wireFriendRequestActions(root);
   }
@@ -378,7 +380,7 @@ const Views = (() => {
             (r) => `
           <div class="list-row">
             ${avatar(r.from, 'sm')}
-            <span class="list-main"><span class="list-title">${Fmt.escapeHtml(r.from.name)}</span><span class="list-sub">${Fmt.escapeHtml(r.from.email)}</span></span>
+            <span class="list-main"><span class="list-title">${Fmt.escapeHtml(r.from.name)}</span><span class="list-sub">${Fmt.escapeHtml(r.from.username ? '@' + r.from.username : r.from.email || '')}</span></span>
             <button class="btn btn-tiny" data-accept-request="${r.id}">Accept</button>
             <button class="btn btn-tiny btn-ghost" data-decline-request="${r.id}">Decline</button>
           </div>`
@@ -416,7 +418,7 @@ const Views = (() => {
 
   async function friendDetail(root, id) {
     root.innerHTML = `<div class="skeleton">Loading…</div>`;
-    const [{ friends }, { expenses }, { settlements }] = await Promise.all([
+    const [{ friends, currency }, { expenses }, { settlements }] = await Promise.all([
       Api.get('/users/friends'),
       Api.get(`/expenses?friendId=${id}`),
       Api.get(`/settlements?friendId=${id}`),
@@ -438,7 +440,7 @@ const Views = (() => {
           ${avatar(friend, 'lg')}
           <div>
             <h2>${Fmt.escapeHtml(friend.name)}</h2>
-            <div class="list-balance ${balanceClass(friend.balance)}">${balanceLabel(friend.balance, 'USD')}</div>
+            <div class="list-balance ${balanceClass(friend.balance)}">${balanceLabel(friend.balance, currency)}</div>
           </div>
         </div>
         <div class="detail-actions">
@@ -456,7 +458,7 @@ const Views = (() => {
       const amount = Math.abs(friend.balance);
       const fromId = friend.balance > 0 ? friend.id : App.currentUser.id;
       const toId = friend.balance > 0 ? App.currentUser.id : friend.id;
-      openSettleModal({ fromId, toId, amount, members: [App.currentUser, friend] });
+      openSettleModal({ fromId, toId, amount, members: [App.currentUser, friend], currency });
     });
   }
 
@@ -531,18 +533,49 @@ const Views = (() => {
     });
   }
 
+  async function openSettingsModal() {
+    const me = App.currentUser;
+    const currencyOptions = CURRENCIES.map(
+      (c) => `<option value="${c}" ${me.defaultCurrency === c ? 'selected' : ''}>${c}</option>`
+    ).join('');
+    Modal.open(`
+      <h2>Settings</h2>
+      <div id="settings-error" class="auth-error hidden"></div>
+      <div class="field"><label>Default currency</label><select id="settings-currency">${currencyOptions}</select></div>
+      <div class="field"><label>Username</label><input type="text" id="settings-username" value="${Fmt.escapeHtml(me.username)}"/></div>
+      <div class="field"><label>Email</label><input type="email" id="settings-email" value="${Fmt.escapeHtml(me.email || '')}" placeholder="optional if phone is set"/></div>
+      <div class="field"><label>Phone</label><input type="tel" id="settings-phone" value="${Fmt.escapeHtml(me.phone || '')}" placeholder="optional if email is set"/></div>
+      <button class="btn btn-primary btn-block" id="settings-submit">Save changes</button>
+    `);
+    document.getElementById('settings-submit').addEventListener('click', async () => {
+      try {
+        const { user } = await Api.put('/auth/me', {
+          username: document.getElementById('settings-username').value.trim(),
+          email: document.getElementById('settings-email').value.trim(),
+          phone: document.getElementById('settings-phone').value.trim(),
+          defaultCurrency: document.getElementById('settings-currency').value,
+        });
+        Modal.close();
+        Toast.show('Settings saved');
+        App.onProfileUpdated(user);
+      } catch (e) {
+        showFieldError('settings-error', e.message);
+      }
+    });
+  }
+
   async function openAddFriendModal() {
     Modal.open(`
       <h2>Add a friend</h2>
       <p class="modal-subtitle">They'll get a friend request to accept before you can split expenses together.</p>
       <div id="friend-error" class="auth-error hidden"></div>
-      <div class="field"><label>Email address</label><input type="email" id="new-friend-email" placeholder="friend@example.com"/></div>
+      <div class="field"><label>Username, email or phone</label><input type="text" id="new-friend-identifier" placeholder="e.g. alice_w or alice@example.com"/></div>
       <button class="btn btn-primary btn-block" id="new-friend-submit">Send friend request</button>
     `);
     document.getElementById('new-friend-submit').addEventListener('click', async () => {
-      const email = document.getElementById('new-friend-email').value.trim();
+      const identifier = document.getElementById('new-friend-identifier').value.trim();
       try {
-        const result = await Api.post('/users/friends', { email });
+        const result = await Api.post('/users/friends', { identifier });
         Modal.close();
         Toast.show(result.status === 'accepted' ? 'Friend added' : 'Friend request sent');
         App.refreshFriendBadge();
@@ -553,19 +586,20 @@ const Views = (() => {
     });
   }
 
-  function openSettleModal({ groupId, fromId, toId, amount, members }) {
+  function openSettleModal({ groupId, fromId, toId, amount, members, currency }) {
     const byId = Object.fromEntries(members.map((m) => [m.id, m]));
+    const cur = currency || 'USD';
     Modal.open(`
       <h2>Settle up</h2>
       <p>${Fmt.escapeHtml(byId[fromId].name)} pays ${Fmt.escapeHtml(byId[toId].name)}</p>
       <div id="settle-error" class="auth-error hidden"></div>
-      <div class="field"><label>Amount</label><input type="number" min="0.01" step="0.01" id="settle-amount" value="${amount.toFixed(2)}"/></div>
+      <div class="field"><label>Amount (${cur})</label><input type="number" min="0.01" step="0.01" id="settle-amount" value="${amount.toFixed(2)}"/></div>
       <button class="btn btn-primary btn-block" id="settle-submit">Record payment</button>
     `);
     document.getElementById('settle-submit').addEventListener('click', async () => {
       const amt = Number(document.getElementById('settle-amount').value);
       try {
-        await Api.post('/settlements', { groupId: groupId || null, fromUser: fromId, toUser: toId, amount: amt });
+        await Api.post('/settlements', { groupId: groupId || null, fromUser: fromId, toUser: toId, amount: amt, currency: cur });
         Modal.close();
         Toast.show('Payment recorded');
         App.refreshCurrentView();
@@ -581,5 +615,5 @@ const Views = (() => {
     el.classList.remove('hidden');
   }
 
-  return { dashboard, groups, groupDetail, friends, friendDetail, activity, openCreateGroupModal, openAddFriendModal };
+  return { dashboard, groups, groupDetail, friends, friendDetail, activity, openCreateGroupModal, openAddFriendModal, openSettingsModal };
 })();

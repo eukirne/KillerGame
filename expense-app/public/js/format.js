@@ -1,8 +1,21 @@
 const Fmt = (() => {
+  const CURRENCY_SYMBOLS = {
+    USD: '$',
+    EUR: '€',
+    GBP: '£',
+    JPY: '¥',
+    CAD: 'CA$',
+    AUD: 'A$',
+    INR: '₹',
+    MXN: 'MX$',
+    BRL: 'R$',
+    CHF: 'CHF ',
+  };
+
   function money(amount, currency) {
     const abs = Math.abs(amount);
     const sign = amount < 0 ? '-' : '';
-    const symbol = currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : '$';
+    const symbol = CURRENCY_SYMBOLS[currency] || `${currency || 'USD'} `;
     return `${sign}${symbol}${abs.toFixed(2)}`;
   }
 

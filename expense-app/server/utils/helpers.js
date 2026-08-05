@@ -2,7 +2,23 @@ const db = require('../db/db');
 
 function publicUser(u) {
   if (!u) return null;
-  return { id: u.id, name: u.name, email: u.email, avatarColor: u.avatar_color };
+  return { id: u.id, name: u.name, username: u.username, email: u.email, avatarColor: u.avatar_color };
+}
+
+// Fuller serialization for "my own profile" (settings page) — includes
+// fields we never expose about other users, like phone and currency prefs.
+function meUser(u) {
+  if (!u) return null;
+  return {
+    id: u.id,
+    name: u.name,
+    username: u.username,
+    email: u.email,
+    phone: u.phone,
+    avatarColor: u.avatar_color,
+    defaultCurrency: u.default_currency,
+    hasPassword: !!u.password_hash,
+  };
 }
 
 // Every helper below takes an optional trailing `conn` (defaults to the
@@ -15,6 +31,38 @@ async function getUserById(id, conn = db) {
 
 async function getUserByEmail(email, conn = db) {
   return conn.get('SELECT * FROM users WHERE email = ?', [String(email).toLowerCase()]);
+}
+
+async function getUserByUsername(username, conn = db) {
+  return conn.get('SELECT * FROM users WHERE username = ?', [String(username).toLowerCase()]);
+}
+
+async function getUserByPhone(phone, conn = db) {
+  return conn.get('SELECT * FROM users WHERE phone = ?', [String(phone).trim()]);
+}
+
+// Looks up a user by whichever of username/email/phone the value matches —
+// used for login and for finding people to friend/invite, where the caller
+// doesn't know (or care) which kind of identifier was typed in.
+async function getUserByIdentifier(identifier, conn = db) {
+  const value = String(identifier || '').trim().toLowerCase();
+  if (!value) return null;
+  return conn.get('SELECT * FROM users WHERE username = ? OR email = ? OR phone = ?', [value, value, String(identifier).trim()]);
+}
+
+async function generateUniqueUsername(base, conn = db) {
+  const cleaned = String(base || 'user')
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, '')
+    .slice(0, 15) || 'user';
+  let candidate = cleaned;
+  let suffix = 0;
+  // eslint-disable-next-line no-await-in-loop
+  while (await getUserByUsername(candidate, conn)) {
+    suffix += 1;
+    candidate = `${cleaned}${suffix}`;
+  }
+  return candidate;
 }
 
 // The one friendships row for a pair, regardless of who is requester/addressee.
@@ -60,8 +108,13 @@ async function getGroupMemberIds(groupId, conn = db) {
 
 module.exports = {
   publicUser,
+  meUser,
   getUserById,
   getUserByEmail,
+  getUserByUsername,
+  getUserByPhone,
+  getUserByIdentifier,
+  generateUniqueUsername,
   ensureFriendship,
   getFriendshipRow,
   areFriends,

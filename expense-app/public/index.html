@@ -27,7 +27,7 @@
     <div id="auth-error" class="auth-error hidden"></div>
     <form id="login-form" class="auth-form">
       <h2>Welcome back</h2>
-      <label>Email<input type="email" id="login-email" required autocomplete="email"/></label>
+      <label>Username, email or phone<input type="text" id="login-identifier" required autocomplete="username"/></label>
       <label>Password<input type="password" id="login-password" required autocomplete="current-password"/></label>
       <button type="submit" class="btn btn-primary btn-block">Log in</button>
       <p class="auth-switch">New here? <a href="#" id="show-signup">Create an account</a></p>
@@ -35,7 +35,9 @@
     <form id="signup-form" class="auth-form hidden">
       <h2>Create your account</h2>
       <label>Name<input type="text" id="signup-name" required autocomplete="name"/></label>
-      <label>Email<input type="email" id="signup-email" required autocomplete="email"/></label>
+      <label>Username<input type="text" id="signup-username" required autocomplete="username" placeholder="letters, numbers, underscore"/></label>
+      <label>Email<input type="email" id="signup-email" autocomplete="email" placeholder="required if no phone"/></label>
+      <label>Phone<input type="tel" id="signup-phone" autocomplete="tel" placeholder="required if no email"/></label>
       <label>Password<input type="password" id="signup-password" required minlength="6" autocomplete="new-password"/></label>
       <button type="submit" class="btn btn-primary btn-block">Sign up</button>
       <p class="auth-switch">Already have an account? <a href="#" id="show-login">Log in</a></p>
@@ -57,14 +59,20 @@
         <a href="#/activity" data-route="activity">Activity</a>
         <div class="mobile-nav-footer">
           <div id="mobile-user-chip" class="user-chip"></div>
-          <button id="mobile-logout-btn" class="btn-link">Log out</button>
+          <span class="footer-links">
+            <button id="mobile-settings-btn" class="btn-link">Settings</button>
+            <button id="mobile-logout-btn" class="btn-link">Log out</button>
+          </span>
         </div>
       </nav>
     </div>
     <button id="add-expense-btn" class="btn btn-primary btn-block add-expense-fab">+ Add expense</button>
     <div class="side-footer">
       <div id="user-chip" class="user-chip"></div>
-      <button id="logout-btn" class="btn-link">Log out</button>
+      <span class="footer-links">
+        <button id="settings-btn" class="btn-link">Settings</button>
+        <button id="logout-btn" class="btn-link">Log out</button>
+      </span>
     </div>
   </aside>
 

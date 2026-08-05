@@ -7,10 +7,10 @@ const asyncHandler = require('../utils/asyncHandler');
 
 const router = express.Router();
 
-async function groupSummary(group, userId) {
+async function groupSummary(group, userId, currency) {
   const memberIds = await getGroupMemberIds(group.id);
   const members = await Promise.all(memberIds.map(async (id) => publicUser(await getUserById(id))));
-  const net = await getGroupNetPositions(group.id, memberIds);
+  const net = await getGroupNetPositions(group.id, memberIds, currency);
   return {
     id: group.id,
     name: group.name,
@@ -18,6 +18,7 @@ async function groupSummary(group, userId) {
     createdBy: group.created_by,
     members,
     yourBalanceCents: net.get(userId) || 0,
+    currency,
   };
 }
 
@@ -25,6 +26,7 @@ router.get(
   '/',
   requireAuth,
   asyncHandler(async (req, res) => {
+    const me = await getUserById(req.userId);
     const groups = await db.all(
       `SELECT g.* FROM groups g
        JOIN group_members gm ON gm.group_id = g.id
@@ -32,7 +34,7 @@ router.get(
        ORDER BY g.created_at DESC`,
       [req.userId]
     );
-    const summaries = await Promise.all(groups.map((g) => groupSummary(g, req.userId)));
+    const summaries = await Promise.all(groups.map((g) => groupSummary(g, req.userId, me.default_currency)));
     res.json({ groups: summaries });
   })
 );
@@ -92,8 +94,9 @@ router.post(
       return { groupId, invited, notFriends, notFound };
     });
 
+    const me = await getUserById(req.userId);
     const group = await db.get('SELECT * FROM groups WHERE id = ?', [groupId]);
-    res.status(201).json({ group: await groupSummary(group, req.userId), invited, notFriends, notFound });
+    res.status(201).json({ group: await groupSummary(group, req.userId, me.default_currency), invited, notFriends, notFound });
   })
 );
 
@@ -106,13 +109,16 @@ router.get(
     if (!group) return res.status(404).json({ error: 'Group not found' });
     if (!(await isGroupMember(groupId, req.userId))) return res.status(403).json({ error: 'Not a member of this group' });
 
+    const me = await getUserById(req.userId);
+    const currency = me.default_currency;
+
     const memberIds = await getGroupMemberIds(groupId);
     const members = await Promise.all(memberIds.map(async (id) => publicUser(await getUserById(id))));
-    const net = await getGroupNetPositions(groupId, memberIds);
+    const net = await getGroupNetPositions(groupId, memberIds, currency);
     const netOut = {};
     for (const id of memberIds) netOut[id] = fromCents(net.get(id) || 0);
 
-    const pairwiseRaw = await getGroupPairwiseBalances(groupId, memberIds);
+    const pairwiseRaw = await getGroupPairwiseBalances(groupId, memberIds, currency);
     const pairwise = await Promise.all(
       pairwiseRaw.map(async (p) => ({
         from: publicUser(await getUserById(p.from)),
@@ -134,6 +140,7 @@ router.get(
       netBalances: netOut,
       pairwiseBalances: pairwise,
       simplifiedDebts: simplified,
+      currency,
     });
   })
 );
@@ -152,8 +159,9 @@ router.put(
       type || null,
       groupId,
     ]);
+    const me = await getUserById(req.userId);
     const updated = await db.get('SELECT * FROM groups WHERE id = ?', [groupId]);
-    res.json({ group: await groupSummary(updated, req.userId) });
+    res.json({ group: await groupSummary(updated, req.userId, me.default_currency) });
   })
 );
 
