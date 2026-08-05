@@ -1,24 +1,34 @@
 const express = require('express');
 const db = require('../db/db');
 const { requireAuth } = require('../middleware/auth');
-const { publicUser, getUserById, isGroupMember } = require('../utils/helpers');
+const { publicUser, getUserById, getUsersByIds, isGroupMember } = require('../utils/helpers');
 const asyncHandler = require('../utils/asyncHandler');
 
 const router = express.Router();
 
-async function serialize(s) {
-  const [from, to] = await Promise.all([getUserById(s.from_user), getUserById(s.to_user)]);
+function formatSettlement(s, userById) {
   return {
     id: s.id,
     groupId: s.group_id,
-    from: publicUser(from),
-    to: publicUser(to),
+    from: publicUser(userById.get(s.from_user)),
+    to: publicUser(userById.get(s.to_user)),
     amount: s.amount,
     currency: s.currency,
     note: s.note,
     date: s.date,
     createdAt: s.created_at,
   };
+}
+
+async function serialize(s) {
+  const userById = await getUsersByIds([s.from_user, s.to_user]);
+  return formatSettlement(s, userById);
+}
+
+async function serializeAll(rows) {
+  if (rows.length === 0) return [];
+  const userById = await getUsersByIds(rows.flatMap((s) => [s.from_user, s.to_user]));
+  return rows.map((s) => formatSettlement(s, userById));
 }
 
 router.post(
@@ -75,7 +85,7 @@ router.get(
       ]);
     }
 
-    res.json({ settlements: await Promise.all(rows.map(serialize)) });
+    res.json({ settlements: await serializeAll(rows) });
   })
 );
 

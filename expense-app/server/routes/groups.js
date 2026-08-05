@@ -1,7 +1,16 @@
 const express = require('express');
 const db = require('../db/db');
 const { requireAuth } = require('../middleware/auth');
-const { publicUser, getUserById, getUserByEmail, ensureFriendship, areFriends, isGroupMember, getGroupMemberIds } = require('../utils/helpers');
+const {
+  publicUser,
+  getUserById,
+  getUsersByIds,
+  getUserByEmail,
+  ensureFriendship,
+  areFriends,
+  isGroupMember,
+  getGroupMemberIds,
+} = require('../utils/helpers');
 const { getGroupNetPositions, getGroupPairwiseBalances, simplifyDebts, fromCents } = require('../utils/balances');
 const asyncHandler = require('../utils/asyncHandler');
 
@@ -9,7 +18,8 @@ const router = express.Router();
 
 async function groupSummary(group, userId, currency) {
   const memberIds = await getGroupMemberIds(group.id);
-  const members = await Promise.all(memberIds.map(async (id) => publicUser(await getUserById(id))));
+  const userById = await getUsersByIds(memberIds);
+  const members = memberIds.map((id) => publicUser(userById.get(id)));
   const net = await getGroupNetPositions(group.id, memberIds, currency);
   return {
     id: group.id,
@@ -113,27 +123,26 @@ router.get(
     const currency = me.default_currency;
 
     const memberIds = await getGroupMemberIds(groupId);
-    const members = await Promise.all(memberIds.map(async (id) => publicUser(await getUserById(id))));
+    const userById = await getUsersByIds(memberIds);
+    const members = memberIds.map((id) => publicUser(userById.get(id)));
     const net = await getGroupNetPositions(groupId, memberIds, currency);
     const netOut = {};
     for (const id of memberIds) netOut[id] = fromCents(net.get(id) || 0);
 
+    // from/to are always members of this group, so the member lookup above
+    // already has every user these need — no extra queries required.
     const pairwiseRaw = await getGroupPairwiseBalances(groupId, memberIds, currency);
-    const pairwise = await Promise.all(
-      pairwiseRaw.map(async (p) => ({
-        from: publicUser(await getUserById(p.from)),
-        to: publicUser(await getUserById(p.to)),
-        amount: fromCents(p.amountCents),
-      }))
-    );
+    const pairwise = pairwiseRaw.map((p) => ({
+      from: publicUser(userById.get(p.from)),
+      to: publicUser(userById.get(p.to)),
+      amount: fromCents(p.amountCents),
+    }));
 
-    const simplified = await Promise.all(
-      simplifyDebts(net).map(async (t) => ({
-        from: publicUser(await getUserById(t.from)),
-        to: publicUser(await getUserById(t.to)),
-        amount: fromCents(t.amountCents),
-      }))
-    );
+    const simplified = simplifyDebts(net).map((t) => ({
+      from: publicUser(userById.get(t.from)),
+      to: publicUser(userById.get(t.to)),
+      amount: fromCents(t.amountCents),
+    }));
 
     res.json({
       group: { id: group.id, name: group.name, type: group.type, createdBy: group.created_by, members },

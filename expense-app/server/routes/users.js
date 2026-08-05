@@ -1,7 +1,7 @@
 const express = require('express');
 const db = require('../db/db');
 const { requireAuth } = require('../middleware/auth');
-const { publicUser, getUserById, getUserByIdentifier, getFriendshipRow } = require('../utils/helpers');
+const { publicUser, getUserById, getUsersByIds, getUserByIdentifier, getFriendshipRow } = require('../utils/helpers');
 const { getUserBalances, fromCents } = require('../utils/balances');
 const asyncHandler = require('../utils/asyncHandler');
 
@@ -23,12 +23,11 @@ router.get(
     const userBalances = await getUserBalances(req.userId, currency);
     const balances = new Map(userBalances.map((b) => [b.userId, b.netCents]));
 
-    const friends = await Promise.all(
-      friendIds.map(async (id) => ({
-        ...publicUser(await getUserById(id)),
-        balance: fromCents(balances.get(id) || 0),
-      }))
-    );
+    const userById = await getUsersByIds(friendIds);
+    const friends = friendIds.map((id) => ({
+      ...publicUser(userById.get(id)),
+      balance: fromCents(balances.get(id) || 0),
+    }));
     friends.sort((a, b) => a.name.localeCompare(b.name));
 
     res.json({ friends, currency });
@@ -44,13 +43,12 @@ router.get(
       `SELECT id, requester_id, created_at FROM friendships WHERE addressee_id = ? AND status = 'pending' ORDER BY created_at DESC`,
       [req.userId]
     );
-    const requests = await Promise.all(
-      rows.map(async (r) => ({
-        id: r.id,
-        from: publicUser(await getUserById(r.requester_id)),
-        createdAt: r.created_at,
-      }))
-    );
+    const userById = await getUsersByIds(rows.map((r) => r.requester_id));
+    const requests = rows.map((r) => ({
+      id: r.id,
+      from: publicUser(userById.get(r.requester_id)),
+      createdAt: r.created_at,
+    }));
     res.json({ requests });
   })
 );

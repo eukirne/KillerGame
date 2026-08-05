@@ -1,7 +1,7 @@
 const express = require('express');
 const db = require('../db/db');
 const { requireAuth } = require('../middleware/auth');
-const { publicUser, getUserById, ensureFriendship, isGroupMember, getGroupMemberIds } = require('../utils/helpers');
+const { publicUser, getUserById, getUsersByIds, ensureFriendship, isGroupMember, getGroupMemberIds } = require('../utils/helpers');
 const { computeShares } = require('../utils/splitLogic');
 const { fromCents } = require('../utils/money');
 const fx = require('../utils/fx');
@@ -19,38 +19,70 @@ async function isExpenseParticipant(expenseId, userId) {
   return !!row;
 }
 
-async function serializeExpense(e, viewerCurrency) {
-  const shareRows = await db.all('SELECT user_id, amount FROM expense_shares WHERE expense_id = ?', [e.id]);
-  const shares = await Promise.all(
-    shareRows.map(async (s) => ({ user: publicUser(await getUserById(s.user_id)), amount: s.amount }))
-  );
-  const [paidBy, createdBy] = await Promise.all([getUserById(e.paid_by), getUserById(e.created_by)]);
+// Batched serializer: one query for every expense's shares, one for every
+// user involved (payers/creators/share-holders across the whole list), and
+// one fx.getRates call for every distinct currency/date pair — instead of
+// that fan-out repeated per expense. Safe to call with a single-item array
+// for the single-expense routes below.
+async function serializeExpenses(rows, viewerCurrency) {
+  if (rows.length === 0) return [];
+  const ids = rows.map((e) => e.id);
+  const placeholders = ids.map(() => '?').join(',');
+  const shareRows = await db.all(`SELECT expense_id, user_id, amount FROM expense_shares WHERE expense_id IN (${placeholders})`, ids);
 
-  let convertedAmount = null;
-  let convertedCurrency = null;
-  if (viewerCurrency && viewerCurrency !== e.currency) {
-    const rates = await fx.getRates([{ currency: e.currency, date: e.date }], viewerCurrency);
-    const rate = rates.get(`${e.currency}|${e.date}`) ?? 1;
-    convertedAmount = Math.round(e.amount * rate * 100) / 100;
-    convertedCurrency = viewerCurrency;
+  const sharesByExpense = new Map();
+  for (const s of shareRows) {
+    if (!sharesByExpense.has(s.expense_id)) sharesByExpense.set(s.expense_id, []);
+    sharesByExpense.get(s.expense_id).push(s);
   }
 
-  return {
-    id: e.id,
-    groupId: e.group_id,
-    description: e.description,
-    amount: e.amount,
-    currency: e.currency,
-    convertedAmount,
-    convertedCurrency,
-    category: e.category,
-    splitType: e.split_type,
-    date: e.date,
-    paidBy: publicUser(paidBy),
-    createdBy: publicUser(createdBy),
-    createdAt: e.created_at,
-    shares,
-  };
+  const userIds = new Set();
+  for (const e of rows) {
+    userIds.add(e.paid_by);
+    userIds.add(e.created_by);
+  }
+  for (const s of shareRows) userIds.add(s.user_id);
+  const userById = await getUsersByIds([...userIds]);
+
+  let rates = new Map();
+  if (viewerCurrency) {
+    const pairs = rows.filter((e) => e.currency !== viewerCurrency).map((e) => ({ currency: e.currency, date: e.date }));
+    if (pairs.length) rates = await fx.getRates(pairs, viewerCurrency);
+  }
+
+  return rows.map((e) => {
+    const shares = (sharesByExpense.get(e.id) || []).map((s) => ({ user: publicUser(userById.get(s.user_id)), amount: s.amount }));
+
+    let convertedAmount = null;
+    let convertedCurrency = null;
+    if (viewerCurrency && viewerCurrency !== e.currency) {
+      const rate = rates.get(`${e.currency}|${e.date}`) ?? 1;
+      convertedAmount = Math.round(e.amount * rate * 100) / 100;
+      convertedCurrency = viewerCurrency;
+    }
+
+    return {
+      id: e.id,
+      groupId: e.group_id,
+      description: e.description,
+      amount: e.amount,
+      currency: e.currency,
+      convertedAmount,
+      convertedCurrency,
+      category: e.category,
+      splitType: e.split_type,
+      date: e.date,
+      paidBy: publicUser(userById.get(e.paid_by)),
+      createdBy: publicUser(userById.get(e.created_by)),
+      createdAt: e.created_at,
+      shares,
+    };
+  });
+}
+
+async function serializeExpense(e, viewerCurrency) {
+  const [result] = await serializeExpenses([e], viewerCurrency);
+  return result;
 }
 
 router.post(
@@ -142,6 +174,7 @@ router.get(
         cap,
       ]);
     } else if (friendId) {
+      const friendIdNum = Number(friendId);
       rows = await db.all(
         `SELECT DISTINCT e.* FROM expenses e
          LEFT JOIN expense_shares es ON es.expense_id = e.id
@@ -149,11 +182,28 @@ router.get(
          ORDER BY e.date DESC, e.id DESC LIMIT ?`,
         [req.userId, req.userId, cap]
       );
-      // narrow to expenses that include both the current user and the friend
-      const flags = await Promise.all(
-        rows.map(async (e) => (await isExpenseParticipant(e.id, req.userId)) && (await isExpenseParticipant(e.id, Number(friendId))))
-      );
-      rows = rows.filter((_, i) => flags[i]);
+      // Narrow to expenses that include both the current user and the
+      // friend — one batched query for every row's shares instead of the
+      // two isExpenseParticipant() round trips per row this used to be.
+      const rowIds = rows.map((e) => e.id);
+      const shareUsersByExpense = new Map();
+      if (rowIds.length) {
+        const placeholders = rowIds.map(() => '?').join(',');
+        const shareRows = await db.all(
+          `SELECT expense_id, user_id FROM expense_shares WHERE expense_id IN (${placeholders}) AND user_id IN (?, ?)`,
+          [...rowIds, req.userId, friendIdNum]
+        );
+        for (const s of shareRows) {
+          if (!shareUsersByExpense.has(s.expense_id)) shareUsersByExpense.set(s.expense_id, new Set());
+          shareUsersByExpense.get(s.expense_id).add(s.user_id);
+        }
+      }
+      rows = rows.filter((e) => {
+        const shareUsers = shareUsersByExpense.get(e.id);
+        const meIn = e.paid_by === req.userId || (shareUsers && shareUsers.has(req.userId));
+        const friendIn = e.paid_by === friendIdNum || (shareUsers && shareUsers.has(friendIdNum));
+        return meIn && friendIn;
+      });
     } else {
       rows = await db.all(
         `SELECT DISTINCT e.* FROM expenses e
@@ -165,7 +215,7 @@ router.get(
     }
 
     const me = await getUserById(req.userId);
-    res.json({ expenses: await Promise.all(rows.map((e) => serializeExpense(e, me.default_currency))) });
+    res.json({ expenses: await serializeExpenses(rows, me.default_currency) });
   })
 );
 
@@ -181,14 +231,13 @@ router.get(
       return res.status(403).json({ error: 'Not authorized' });
     }
     const commentRows = await db.all('SELECT * FROM comments WHERE expense_id = ? ORDER BY created_at ASC', [expense.id]);
-    const comments = await Promise.all(
-      commentRows.map(async (c) => ({
-        id: c.id,
-        body: c.body,
-        createdAt: c.created_at,
-        user: publicUser(await getUserById(c.user_id)),
-      }))
-    );
+    const commentUserById = await getUsersByIds(commentRows.map((c) => c.user_id));
+    const comments = commentRows.map((c) => ({
+      id: c.id,
+      body: c.body,
+      createdAt: c.created_at,
+      user: publicUser(commentUserById.get(c.user_id)),
+    }));
     const me = await getUserById(req.userId);
     res.json({ expense: await serializeExpense(expense, me.default_currency), comments });
   })

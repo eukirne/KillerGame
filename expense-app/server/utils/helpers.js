@@ -29,6 +29,17 @@ async function getUserById(id, conn = db) {
   return conn.get('SELECT * FROM users WHERE id = ?', [id]);
 }
 
+// Batched form of getUserById — one round trip for a whole list instead of
+// one per row. Returns Map<id, userRow>; missing/duplicate ids are handled
+// gracefully (an id with no matching user is simply absent from the map).
+async function getUsersByIds(ids, conn = db) {
+  const unique = [...new Set(ids)].filter((id) => id != null);
+  if (unique.length === 0) return new Map();
+  const placeholders = unique.map(() => '?').join(',');
+  const rows = await conn.all(`SELECT * FROM users WHERE id IN (${placeholders})`, unique);
+  return new Map(rows.map((r) => [r.id, r]));
+}
+
 async function getUserByEmail(email, conn = db) {
   return conn.get('SELECT * FROM users WHERE email = ?', [String(email).toLowerCase()]);
 }
@@ -110,6 +121,7 @@ module.exports = {
   publicUser,
   meUser,
   getUserById,
+  getUsersByIds,
   getUserByEmail,
   getUserByUsername,
   getUserByPhone,
