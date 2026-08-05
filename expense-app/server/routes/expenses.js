@@ -4,6 +4,7 @@ const { requireAuth } = require('../middleware/auth');
 const { publicUser, getUserById, ensureFriendship, isGroupMember, getGroupMemberIds } = require('../utils/helpers');
 const { computeShares } = require('../utils/splitLogic');
 const { fromCents } = require('../utils/money');
+const fx = require('../utils/fx');
 const asyncHandler = require('../utils/asyncHandler');
 
 const router = express.Router();
@@ -18,18 +19,30 @@ async function isExpenseParticipant(expenseId, userId) {
   return !!row;
 }
 
-async function serializeExpense(e) {
+async function serializeExpense(e, viewerCurrency) {
   const shareRows = await db.all('SELECT user_id, amount FROM expense_shares WHERE expense_id = ?', [e.id]);
   const shares = await Promise.all(
     shareRows.map(async (s) => ({ user: publicUser(await getUserById(s.user_id)), amount: s.amount }))
   );
   const [paidBy, createdBy] = await Promise.all([getUserById(e.paid_by), getUserById(e.created_by)]);
+
+  let convertedAmount = null;
+  let convertedCurrency = null;
+  if (viewerCurrency && viewerCurrency !== e.currency) {
+    const rates = await fx.getRates([{ currency: e.currency, date: e.date }], viewerCurrency);
+    const rate = rates.get(`${e.currency}|${e.date}`) ?? 1;
+    convertedAmount = Math.round(e.amount * rate * 100) / 100;
+    convertedCurrency = viewerCurrency;
+  }
+
   return {
     id: e.id,
     groupId: e.group_id,
     description: e.description,
     amount: e.amount,
     currency: e.currency,
+    convertedAmount,
+    convertedCurrency,
     category: e.category,
     splitType: e.split_type,
     date: e.date,
@@ -109,8 +122,8 @@ router.post(
       return expenseId;
     });
 
-    const expense = await db.get('SELECT * FROM expenses WHERE id = ?', [expenseId]);
-    res.status(201).json({ expense: await serializeExpense(expense) });
+    const [expense, me] = await Promise.all([db.get('SELECT * FROM expenses WHERE id = ?', [expenseId]), getUserById(req.userId)]);
+    res.status(201).json({ expense: await serializeExpense(expense, me.default_currency) });
   })
 );
 
@@ -151,7 +164,8 @@ router.get(
       );
     }
 
-    res.json({ expenses: await Promise.all(rows.map(serializeExpense)) });
+    const me = await getUserById(req.userId);
+    res.json({ expenses: await Promise.all(rows.map((e) => serializeExpense(e, me.default_currency))) });
   })
 );
 
@@ -175,7 +189,8 @@ router.get(
         user: publicUser(await getUserById(c.user_id)),
       }))
     );
-    res.json({ expense: await serializeExpense(expense), comments });
+    const me = await getUserById(req.userId);
+    res.json({ expense: await serializeExpense(expense, me.default_currency), comments });
   })
 );
 
@@ -244,8 +259,8 @@ router.put(
       }
     });
 
-    const updated = await db.get('SELECT * FROM expenses WHERE id = ?', [expense.id]);
-    res.json({ expense: await serializeExpense(updated) });
+    const [updated, me] = await Promise.all([db.get('SELECT * FROM expenses WHERE id = ?', [expense.id]), getUserById(req.userId)]);
+    res.json({ expense: await serializeExpense(updated, me.default_currency) });
   })
 );
 

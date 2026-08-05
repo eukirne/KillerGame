@@ -2,6 +2,7 @@ const express = require('express');
 const db = require('../db/db');
 const { requireAuth } = require('../middleware/auth');
 const { publicUser, getUserById } = require('../utils/helpers');
+const fx = require('../utils/fx');
 const asyncHandler = require('../utils/asyncHandler');
 
 const router = express.Router();
@@ -36,18 +37,33 @@ router.get(
       return groupNameById.get(id);
     }
 
+    const me = await getUserById(req.userId);
+    const myCurrency = me.default_currency;
+
     const expenseItems = await Promise.all(
-      expenseRows.map(async (e) => ({
-        type: 'expense',
-        id: e.id,
-        groupId: e.group_id,
-        groupName: await getGroupName(e.group_id),
-        description: e.description,
-        amount: e.amount,
-        currency: e.currency,
-        paidBy: publicUser(await getUserById(e.paid_by)),
-        createdAt: e.created_at,
-      }))
+      expenseRows.map(async (e) => {
+        let convertedAmount = null;
+        let convertedCurrency = null;
+        if (myCurrency && myCurrency !== e.currency) {
+          const rates = await fx.getRates([{ currency: e.currency, date: e.date }], myCurrency);
+          const rate = rates.get(`${e.currency}|${e.date}`) ?? 1;
+          convertedAmount = Math.round(e.amount * rate * 100) / 100;
+          convertedCurrency = myCurrency;
+        }
+        return {
+          type: 'expense',
+          id: e.id,
+          groupId: e.group_id,
+          groupName: await getGroupName(e.group_id),
+          description: e.description,
+          amount: e.amount,
+          currency: e.currency,
+          convertedAmount,
+          convertedCurrency,
+          paidBy: publicUser(await getUserById(e.paid_by)),
+          createdAt: e.created_at,
+        };
+      })
     );
 
     const settlementItems = await Promise.all(

@@ -12,6 +12,12 @@ const Views = (() => {
     return amount > 0 ? `owes you ${Fmt.money(amount, currency)}` : `you owe ${Fmt.money(-amount, currency)}`;
   }
 
+  function expenseAmountHtml(e, extraClass = '') {
+    const main = `<span class="list-balance ${extraClass}">${Fmt.money(e.amount, e.currency)}</span>`;
+    if (e.convertedAmount == null || e.convertedCurrency === e.currency) return main;
+    return `<span class="list-balance-stack">${main}<span class="list-balance-converted">≈ ${Fmt.money(e.convertedAmount, e.convertedCurrency)}</span></span>`;
+  }
+
   function avatar(user, size) {
     const cls = size === 'lg' ? 'avatar avatar-lg' : size === 'sm' ? 'avatar avatar-sm' : 'avatar';
     return `<span class="${cls}" style="background:${user.avatarColor}">${Fmt.initials(user.name)}</span>`;
@@ -114,7 +120,7 @@ const Views = (() => {
           <span class="list-title">${Fmt.escapeHtml(item.paidBy.name)} added "${Fmt.escapeHtml(item.description)}" ${context}</span>
           <span class="list-sub">${Fmt.dateTime(item.createdAt)}</span>
         </span>
-        <span class="list-balance">${Fmt.money(item.amount, item.currency)}</span>
+        ${expenseAmountHtml(item)}
       </div>`;
     }
     return `<div class="list-row activity-row">
@@ -211,7 +217,7 @@ const Views = (() => {
           <span class="list-title">${Fmt.escapeHtml(e.description)}</span>
           <span class="list-sub">${Fmt.date(e.date)} · paid by ${Fmt.escapeHtml(e.paidBy.name)}</span>
         </span>
-        <span class="list-balance">${Fmt.money(e.amount, e.currency)}</span>
+        ${expenseAmountHtml(e)}
       </div>`
       )
       .join('')}</div>`;
@@ -316,7 +322,11 @@ const Views = (() => {
     const { expense, comments } = await Api.get(`/expenses/${expenseId}`);
     Modal.open(`
       <h2>${Fmt.escapeHtml(expense.description)}</h2>
-      <div class="expense-detail-amount">${Fmt.money(expense.amount, expense.currency)}</div>
+      <div class="expense-detail-amount">${Fmt.money(expense.amount, expense.currency)}${
+      expense.convertedAmount != null && expense.convertedCurrency !== expense.currency
+        ? `<span class="expense-detail-converted">≈ ${Fmt.money(expense.convertedAmount, expense.convertedCurrency)}</span>`
+        : ''
+    }</div>
       <div class="expense-detail-meta">${Fmt.date(expense.date)} · paid by ${Fmt.escapeHtml(expense.paidBy.name)} · ${Fmt.escapeHtml(expense.category)}</div>
       <div class="panel-subsection">
         <h4>Split</h4>
@@ -466,7 +476,7 @@ const Views = (() => {
     return `<div class="list-row">
       <span class="list-icon">${categoryEmoji(e.category)}</span>
       <span class="list-main"><span class="list-title">${Fmt.escapeHtml(e.description)}</span><span class="list-sub">${Fmt.date(e.date)} · paid by ${Fmt.escapeHtml(e.paidBy.name)}</span></span>
-      <span class="list-balance">${Fmt.money(e.amount, e.currency)}</span>
+      ${expenseAmountHtml(e)}
     </div>`;
   }
 

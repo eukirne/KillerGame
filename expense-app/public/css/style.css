@@ -204,6 +204,8 @@ input:focus, select:focus { outline: 2px solid var(--primary); outline-offset: -
 .list-title { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .list-sub { font-size: 12px; color: var(--text-muted); }
 .list-balance { font-size: 13px; font-weight: 700; white-space: nowrap; color: var(--text-muted); }
+.list-balance-stack { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.list-balance-converted { font-size: 11px; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
 .activity-row { cursor: default; }
 
 .member-avatars { display: flex; align-items: center; gap: -6px; margin-top: 6px; }
@@ -238,7 +240,8 @@ input:focus, select:focus { outline: 2px solid var(--primary); outline-offset: -
 
 .comment-row { padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
 .comment-row .list-sub { display: block; margin-top: 2px; }
-.expense-detail-amount { font-size: 28px; font-weight: 800; margin: 4px 0; }
+.expense-detail-amount { font-size: 28px; font-weight: 800; margin: 4px 0; display: flex; align-items: baseline; gap: 10px; }
+.expense-detail-converted { font-size: 14px; font-weight: 600; color: var(--text-muted); }
 .expense-detail-meta { font-size: 13px; color: var(--text-muted); margin-bottom: 10px; }
 
 /* ---------- Modal ---------- */
