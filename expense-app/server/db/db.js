@@ -18,6 +18,15 @@ const pool = new Pool({
   // Managed Postgres providers (Neon, Supabase, Render) require SSL; local
   // dev Postgres normally doesn't have it configured at all.
   ssl: isLocal ? false : { rejectUnauthorized: false },
+  // Serverless providers like Neon suspend their compute after a few
+  // minutes idle and proxy every new connection through a pooler with its
+  // own handshake overhead, so a short idle timeout that keeps forcing
+  // fresh connections is the worst case for them. Keep pool connections
+  // (and the underlying TCP socket) alive longer between requests instead
+  // of tearing them down and paying that cost again on the next click.
+  keepAlive: true,
+  idleTimeoutMillis: 30_000,
+  connectionTimeoutMillis: 10_000,
 });
 
 // better-sqlite3 used `?` placeholders; node-postgres uses `$1, $2, ...`.
