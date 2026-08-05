@@ -1,6 +1,6 @@
 const ExpenseFlow = (() => {
   const CATEGORIES = [
-    ['general', '🧾 General'],
+    ['general', '🧾 Expense'],
     ['food', '🍔 Food & drink'],
     ['home', '🏠 Home'],
     ['transport', '🚗 Transport'],
@@ -123,7 +123,7 @@ const ExpenseFlow = (() => {
           </div>
         </div>
       </div>
-      <div class="field-row">
+      <div class="field-row field-row-triple">
         <div class="field">
           <label>Category</label>
           <select id="exp-category">${catOptions}</select>
