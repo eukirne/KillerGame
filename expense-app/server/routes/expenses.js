@@ -46,7 +46,6 @@ router.post(
   asyncHandler(async (req, res) => {
     const { groupId, description, amount, currency, category, date, paidBy, splitType, participants } = req.body || {};
 
-    if (!description || !description.trim()) return res.status(400).json({ error: 'Description is required' });
     const amountNum = Number(amount);
     if (!(amountNum > 0)) return res.status(400).json({ error: 'Amount must be greater than 0' });
     const payerId = Number(paidBy) || req.userId;
@@ -82,7 +81,7 @@ router.post(
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
         [
           groupId || null,
-          description.trim(),
+          description && description.trim() ? description.trim() : 'Expense',
           amountNum,
           currency || 'USD',
           category || 'general',

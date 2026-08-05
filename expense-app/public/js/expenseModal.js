@@ -1,6 +1,6 @@
 const ExpenseFlow = (() => {
   const CATEGORIES = [
-    ['general', '🧾 Expense'],
+    ['general', '🧾 General'],
     ['food', '🍔 Food & drink'],
     ['home', '🏠 Home'],
     ['transport', '🚗 Transport'],
@@ -274,13 +274,12 @@ const ExpenseFlow = (() => {
   }
 
   async function save(state, editingExpense) {
-    if (!state.description.trim()) return showError('Please enter a description');
     if (!(Number(state.amount) > 0)) return showError('Please enter an amount greater than 0');
     if (state.model.filter((m) => m.included).length === 0) return showError('Select at least one participant');
 
     const payload = {
       groupId: state.groupId,
-      description: state.description,
+      description: state.description.trim() || 'Expense',
       amount: Number(state.amount),
       currency: state.currency,
       category: state.category,

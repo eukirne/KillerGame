@@ -275,6 +275,11 @@ input:focus, select:focus { outline: 2px solid var(--primary); outline-offset: -
 .field-row-triple .field { flex: 1 1 140px; }
 .field-row-triple .field input,
 .field-row-triple .field select { min-width: 0; }
+input[type="date"] {
+  -webkit-appearance: none;
+  appearance: none;
+  box-sizing: border-box;
+}
 
 .split-tabs { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
 .split-tab { background: #eef2f5; border: none; border-radius: 20px; padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer; color: var(--text-muted); }
@@ -387,6 +392,8 @@ input:focus, select:focus { outline: 2px solid var(--primary); outline-offset: -
   .mobile-nav-footer .user-chip { min-width: 0; }
   .mobile-nav-footer .user-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mobile-nav-footer .btn-link { color: #9fc9bf; white-space: nowrap; flex-shrink: 0; }
+
+  .field-row-triple .field { flex: 1 1 100%; }
 
   .add-expense-fab { display: none; }
   .side-footer { display: none; }
