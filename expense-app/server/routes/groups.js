@@ -11,16 +11,16 @@ const {
   isGroupMember,
   getGroupMemberIds,
 } = require('../utils/helpers');
-const { getGroupNetPositions, getGroupPairwiseBalances, simplifyDebts, fromCents } = require('../utils/balances');
+const { getGroupNetPositions, getGroupBalances, simplifyDebts, fromCents } = require('../utils/balances');
 const asyncHandler = require('../utils/asyncHandler');
 
 const router = express.Router();
 
 async function groupSummary(group, userId, currency) {
   const memberIds = await getGroupMemberIds(group.id);
-  const userById = await getUsersByIds(memberIds);
+  // Both only depend on memberIds, not on each other — one round trip.
+  const [userById, net] = await Promise.all([getUsersByIds(memberIds), getGroupNetPositions(group.id, memberIds, currency)]);
   const members = memberIds.map((id) => publicUser(userById.get(id)));
-  const net = await getGroupNetPositions(group.id, memberIds, currency);
   return {
     id: group.id,
     name: group.name,
@@ -36,14 +36,16 @@ router.get(
   '/',
   requireAuth,
   asyncHandler(async (req, res) => {
-    const me = await getUserById(req.userId);
-    const groups = await db.all(
-      `SELECT g.* FROM groups g
+    const [me, groups] = await Promise.all([
+      getUserById(req.userId),
+      db.all(
+        `SELECT g.* FROM groups g
        JOIN group_members gm ON gm.group_id = g.id
        WHERE gm.user_id = ?
        ORDER BY g.created_at DESC`,
-      [req.userId]
-    );
+        [req.userId]
+      ),
+    ]);
     const summaries = await Promise.all(groups.map((g) => groupSummary(g, req.userId, me.default_currency)));
     res.json({ groups: summaries });
   })
@@ -104,8 +106,7 @@ router.post(
       return { groupId, invited, notFriends, notFound };
     });
 
-    const me = await getUserById(req.userId);
-    const group = await db.get('SELECT * FROM groups WHERE id = ?', [groupId]);
+    const [me, group] = await Promise.all([getUserById(req.userId), db.get('SELECT * FROM groups WHERE id = ?', [groupId])]);
     res.status(201).json({ group: await groupSummary(group, req.userId, me.default_currency), invited, notFriends, notFound });
   })
 );
@@ -115,23 +116,33 @@ router.get(
   requireAuth,
   asyncHandler(async (req, res) => {
     const groupId = Number(req.params.id);
-    const group = await db.get('SELECT * FROM groups WHERE id = ?', [groupId]);
-    if (!group) return res.status(404).json({ error: 'Group not found' });
-    if (!(await isGroupMember(groupId, req.userId))) return res.status(403).json({ error: 'Not a member of this group' });
 
-    const me = await getUserById(req.userId);
+    // None of these four depend on each other's result — one round trip
+    // instead of four stacked ones. (The rare 404/403 case does a little
+    // unnecessary work; that's a fine trade for the common case being 4x
+    // fewer round trips to a database that's an ocean away.)
+    const [group, isMember, me, memberIds] = await Promise.all([
+      db.get('SELECT * FROM groups WHERE id = ?', [groupId]),
+      isGroupMember(groupId, req.userId),
+      getUserById(req.userId),
+      getGroupMemberIds(groupId),
+    ]);
+    if (!group) return res.status(404).json({ error: 'Group not found' });
+    if (!isMember) return res.status(403).json({ error: 'Not a member of this group' });
+
     const currency = me.default_currency;
 
-    const memberIds = await getGroupMemberIds(groupId);
-    const userById = await getUsersByIds(memberIds);
+    // Also independent of each other — both only need memberIds/currency.
+    const [userById, { net, pairwise: pairwiseRaw }] = await Promise.all([
+      getUsersByIds(memberIds),
+      getGroupBalances(groupId, memberIds, currency),
+    ]);
     const members = memberIds.map((id) => publicUser(userById.get(id)));
-    const net = await getGroupNetPositions(groupId, memberIds, currency);
     const netOut = {};
     for (const id of memberIds) netOut[id] = fromCents(net.get(id) || 0);
 
     // from/to are always members of this group, so the member lookup above
     // already has every user these need — no extra queries required.
-    const pairwiseRaw = await getGroupPairwiseBalances(groupId, memberIds, currency);
     const pairwise = pairwiseRaw.map((p) => ({
       from: publicUser(userById.get(p.from)),
       to: publicUser(userById.get(p.to)),
@@ -159,17 +170,16 @@ router.put(
   requireAuth,
   asyncHandler(async (req, res) => {
     const groupId = Number(req.params.id);
-    const group = await db.get('SELECT * FROM groups WHERE id = ?', [groupId]);
+    const [group, isMember] = await Promise.all([db.get('SELECT * FROM groups WHERE id = ?', [groupId]), isGroupMember(groupId, req.userId)]);
     if (!group) return res.status(404).json({ error: 'Group not found' });
-    if (!(await isGroupMember(groupId, req.userId))) return res.status(403).json({ error: 'Not a member of this group' });
+    if (!isMember) return res.status(403).json({ error: 'Not a member of this group' });
     const { name, type } = req.body || {};
     await db.run('UPDATE groups SET name = COALESCE(?, name), type = COALESCE(?, type) WHERE id = ?', [
       name && name.trim() ? name.trim() : null,
       type || null,
       groupId,
     ]);
-    const me = await getUserById(req.userId);
-    const updated = await db.get('SELECT * FROM groups WHERE id = ?', [groupId]);
+    const [me, updated] = await Promise.all([getUserById(req.userId), db.get('SELECT * FROM groups WHERE id = ?', [groupId])]);
     res.json({ group: await groupSummary(updated, req.userId, me.default_currency) });
   })
 );
@@ -179,12 +189,15 @@ router.post(
   requireAuth,
   asyncHandler(async (req, res) => {
     const groupId = Number(req.params.id);
-    const group = await db.get('SELECT * FROM groups WHERE id = ?', [groupId]);
+    const [group, isMember, existingMemberIds] = await Promise.all([
+      db.get('SELECT * FROM groups WHERE id = ?', [groupId]),
+      isGroupMember(groupId, req.userId),
+      getGroupMemberIds(groupId),
+    ]);
     if (!group) return res.status(404).json({ error: 'Group not found' });
-    if (!(await isGroupMember(groupId, req.userId))) return res.status(403).json({ error: 'Not a member of this group' });
+    if (!isMember) return res.status(403).json({ error: 'Not a member of this group' });
 
     const { userIds, email } = req.body || {};
-    const existingMemberIds = await getGroupMemberIds(groupId);
     const added = [];
     const notFriends = [];
 
@@ -227,9 +240,9 @@ router.delete(
   asyncHandler(async (req, res) => {
     const groupId = Number(req.params.id);
     const targetId = Number(req.params.userId);
-    const group = await db.get('SELECT * FROM groups WHERE id = ?', [groupId]);
+    const [group, isMember] = await Promise.all([db.get('SELECT * FROM groups WHERE id = ?', [groupId]), isGroupMember(groupId, req.userId)]);
     if (!group) return res.status(404).json({ error: 'Group not found' });
-    if (!(await isGroupMember(groupId, req.userId))) return res.status(403).json({ error: 'Not a member of this group' });
+    if (!isMember) return res.status(403).json({ error: 'Not a member of this group' });
     if (targetId !== req.userId) return res.status(403).json({ error: 'You can only remove yourself from a group' });
 
     const memberIds = await getGroupMemberIds(groupId);

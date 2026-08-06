@@ -11,19 +11,20 @@ router.get(
   '/friends',
   requireAuth,
   asyncHandler(async (req, res) => {
-    const rows = await db.all(
-      `SELECT requester_id, addressee_id FROM friendships
+    const [rows, me] = await Promise.all([
+      db.all(
+        `SELECT requester_id, addressee_id FROM friendships
        WHERE status = 'accepted' AND (requester_id = ? OR addressee_id = ?)`,
-      [req.userId, req.userId]
-    );
+        [req.userId, req.userId]
+      ),
+      getUserById(req.userId),
+    ]);
     const friendIds = rows.map((r) => (r.requester_id === req.userId ? r.addressee_id : r.requester_id));
-
-    const me = await getUserById(req.userId);
     const currency = me.default_currency;
-    const userBalances = await getUserBalances(req.userId, currency);
+
+    const [userBalances, userById] = await Promise.all([getUserBalances(req.userId, currency), getUsersByIds(friendIds)]);
     const balances = new Map(userBalances.map((b) => [b.userId, b.netCents]));
 
-    const userById = await getUsersByIds(friendIds);
     const friends = friendIds.map((id) => ({
       ...publicUser(userById.get(id)),
       balance: fromCents(balances.get(id) || 0),
@@ -88,8 +89,12 @@ router.post(
     if (!request || request.addressee_id !== req.userId) return res.status(404).json({ error: 'Friend request not found' });
     if (request.status !== 'pending') return res.status(400).json({ error: 'This request has already been handled' });
 
-    await db.run("UPDATE friendships SET status = 'accepted', responded_at = NOW() WHERE id = ?", [request.id]);
-    const friend = await getUserById(request.requester_id);
+    // requester_id is already known from `request`, so the update and the
+    // friend lookup don't depend on each other — run them together.
+    const [, friend] = await Promise.all([
+      db.run("UPDATE friendships SET status = 'accepted', responded_at = NOW() WHERE id = ?", [request.id]),
+      getUserById(request.requester_id),
+    ]);
     res.json({ friend: { ...publicUser(friend), balance: 0 } });
   })
 );

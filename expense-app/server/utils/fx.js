@@ -7,9 +7,16 @@ const db = require('../db/db');
 // a new target currency never needs a schema change.
 const DEFAULT_CURRENCY = 'USD';
 
-async function cacheGet(currency, date) {
-  const row = await db.get('SELECT rate FROM fx_rates WHERE currency = ? AND date = ?', [currency, date]);
-  return row ? row.rate : null;
+// Batched cache lookup: one query for every (currency, date) pair instead
+// of one round trip each. Latency to a remote DB is paid per round trip
+// regardless of query complexity, so collapsing N lookups into 1 matters
+// far more than the query itself being slightly bigger.
+async function cacheGetMany(pairs) {
+  if (pairs.length === 0) return new Map();
+  const values = pairs.map(() => '(?, ?)').join(', ');
+  const params = pairs.flatMap((p) => [p.currency, p.date]);
+  const rows = await db.all(`SELECT currency, date, rate FROM fx_rates WHERE (currency, date) IN (${values})`, params);
+  return new Map(rows.map((r) => [`${r.currency}|${r.date}`, r.rate]));
 }
 
 // Most recent rate we have for this currency on any date, used as a
@@ -48,8 +55,8 @@ async function fetchUsdRate(currency, date) {
  */
 async function getUsdRates(pairs) {
   const map = new Map();
-  const misses = [];
   const seen = new Set();
+  const toLookUp = [];
 
   for (const { currency, date } of pairs) {
     const key = `${currency}|${date}`;
@@ -59,9 +66,15 @@ async function getUsdRates(pairs) {
       map.set(key, 1);
       continue;
     }
-    const cached = await cacheGet(currency, date);
-    if (cached != null) map.set(key, cached);
-    else misses.push({ currency, date, key });
+    toLookUp.push({ currency, date, key });
+  }
+
+  const cached = await cacheGetMany(toLookUp);
+  const misses = [];
+  for (const p of toLookUp) {
+    const rate = cached.get(p.key);
+    if (rate != null) map.set(p.key, rate);
+    else misses.push(p);
   }
 
   await Promise.all(

@@ -31,19 +31,19 @@ function baseCents(amount, currency, date, rates) {
  * the given user, and netCents < 0 means the given user owes them.
  */
 async function getUserBalances(userId, targetCurrency = fx.DEFAULT_CURRENCY) {
-  const shareRows = await db.all(
-    `SELECT es.user_id AS ower, e.paid_by AS payer, es.amount AS amt, e.currency AS currency, e.date AS date
+  // Neither query depends on the other's result, so run them as one round
+  // trip instead of two stacked ones.
+  const [shareRows, settlementRows] = await Promise.all([
+    db.all(
+      `SELECT es.user_id AS ower, e.paid_by AS payer, es.amount AS amt, e.currency AS currency, e.date AS date
        FROM expense_shares es
        JOIN expenses e ON e.id = es.expense_id
        WHERE e.deleted = 0 AND es.user_id != e.paid_by
          AND (es.user_id = ? OR e.paid_by = ?)`,
-    [userId, userId]
-  );
-
-  const settlementRows = await db.all(
-    `SELECT from_user, to_user, amount, currency, date FROM settlements WHERE from_user = ? OR to_user = ?`,
-    [userId, userId]
-  );
+      [userId, userId]
+    ),
+    db.all(`SELECT from_user, to_user, amount, currency, date FROM settlements WHERE from_user = ? OR to_user = ?`, [userId, userId]),
+  ]);
 
   const rates = await fx.getRates(
     [
@@ -79,16 +79,16 @@ async function getUserOverallNet(userId, targetCurrency = fx.DEFAULT_CURRENCY) {
   return balances.reduce((sum, b) => sum + b.netCents, 0);
 }
 
-/**
- * Net position of every member within a single group, in `targetCurrency`
- * cents: positive means the group owes them money overall, negative means
- * they owe the group. Returns Map<userId, cents>.
- */
-async function getGroupNetPositions(groupId, memberIds, targetCurrency = fx.DEFAULT_CURRENCY) {
-  const net = new Map(memberIds.map((id) => [id, 0]));
-
-  const expenseRows = await db.all(`SELECT id, amount, paid_by, currency, date FROM expenses WHERE group_id = ? AND deleted = 0`, [
-    groupId,
+// Shared data a group's net positions and pairwise balances are both
+// derived from — fetched once. getGroupNetPositions/getGroupPairwiseBalances
+// used to each independently re-fetch this same data and re-resolve fx
+// rates; when both are needed (as GET /groups/:id does), that duplicated a
+// whole extra round of round trips for no reason. getGroupBalances() below
+// fetches it once and derives both from that single copy.
+async function loadGroupLedger(groupId, targetCurrency) {
+  const [expenseRows, settlementRows] = await Promise.all([
+    db.all(`SELECT id, amount, paid_by, currency, date FROM expenses WHERE group_id = ? AND deleted = 0`, [groupId]),
+    db.all(`SELECT from_user, to_user, amount, currency, date FROM settlements WHERE group_id = ?`, [groupId]),
   ]);
   const expenseIds = expenseRows.map((e) => e.id);
   const expenseById = new Map(expenseRows.map((e) => [e.id, e]));
@@ -99,8 +99,6 @@ async function getGroupNetPositions(groupId, memberIds, targetCurrency = fx.DEFA
     shareRows = await db.all(`SELECT expense_id, user_id, amount FROM expense_shares WHERE expense_id IN (${placeholders})`, expenseIds);
   }
 
-  const settlementRows = await db.all(`SELECT from_user, to_user, amount, currency, date FROM settlements WHERE group_id = ?`, [groupId]);
-
   const rates = await fx.getRates(
     [
       ...expenseRows.map((e) => ({ currency: e.currency, date: e.date })),
@@ -108,6 +106,18 @@ async function getGroupNetPositions(groupId, memberIds, targetCurrency = fx.DEFA
     ],
     targetCurrency
   );
+
+  return { expenseRows, expenseById, shareRows, settlementRows, rates };
+}
+
+/**
+ * Net position of every member within a single group, in `targetCurrency`
+ * cents: positive means the group owes them money overall, negative means
+ * they owe the group. Returns Map<userId, cents>.
+ */
+function netPositionsFromLedger(ledger, memberIds) {
+  const net = new Map(memberIds.map((id) => [id, 0]));
+  const { expenseRows, expenseById, shareRows, settlementRows, rates } = ledger;
 
   for (const e of expenseRows) {
     net.set(e.paid_by, (net.get(e.paid_by) || 0) + baseCents(e.amount, e.currency, e.date, rates));
@@ -129,26 +139,8 @@ async function getGroupNetPositions(groupId, memberIds, targetCurrency = fx.DEFA
  * Pairwise "who owes whom" within a single group (not simplified) — used for
  * the group's balance breakdown list. Amounts in `targetCurrency` cents.
  */
-async function getGroupPairwiseBalances(groupId, memberIds, targetCurrency = fx.DEFAULT_CURRENCY) {
-  const expenseRows = await db.all(`SELECT id, paid_by, currency, date FROM expenses WHERE group_id = ? AND deleted = 0`, [groupId]);
-  const expenseIds = expenseRows.map((e) => e.id);
-  const expenseById = new Map(expenseRows.map((e) => [e.id, e]));
-
-  let shareRows = [];
-  if (expenseIds.length) {
-    const placeholders = expenseIds.map(() => '?').join(',');
-    shareRows = await db.all(`SELECT expense_id, user_id, amount FROM expense_shares WHERE expense_id IN (${placeholders})`, expenseIds);
-  }
-
-  const settlementRows = await db.all(`SELECT from_user, to_user, amount, currency, date FROM settlements WHERE group_id = ?`, [groupId]);
-
-  const rates = await fx.getRates(
-    [
-      ...expenseRows.map((e) => ({ currency: e.currency, date: e.date })),
-      ...settlementRows.map((s) => ({ currency: s.currency, date: s.date })),
-    ],
-    targetCurrency
-  );
+function pairwiseFromLedger(ledger, memberIds) {
+  const { expenseById, shareRows, settlementRows, rates } = ledger;
 
   const map = new Map();
   for (const s of shareRows) {
@@ -173,6 +165,27 @@ async function getGroupPairwiseBalances(groupId, memberIds, targetCurrency = fx.
     }
   }
   return pairs;
+}
+
+async function getGroupNetPositions(groupId, memberIds, targetCurrency = fx.DEFAULT_CURRENCY) {
+  const ledger = await loadGroupLedger(groupId, targetCurrency);
+  return netPositionsFromLedger(ledger, memberIds);
+}
+
+async function getGroupPairwiseBalances(groupId, memberIds, targetCurrency = fx.DEFAULT_CURRENCY) {
+  const ledger = await loadGroupLedger(groupId, targetCurrency);
+  return pairwiseFromLedger(ledger, memberIds);
+}
+
+// Fetches the group's ledger once and derives both net positions and
+// pairwise balances from it — use this instead of calling the two
+// functions above separately when both are needed in the same request.
+async function getGroupBalances(groupId, memberIds, targetCurrency = fx.DEFAULT_CURRENCY) {
+  const ledger = await loadGroupLedger(groupId, targetCurrency);
+  return {
+    net: netPositionsFromLedger(ledger, memberIds),
+    pairwise: pairwiseFromLedger(ledger, memberIds),
+  };
 }
 
 /**
@@ -212,6 +225,7 @@ module.exports = {
   getUserOverallNet,
   getGroupNetPositions,
   getGroupPairwiseBalances,
+  getGroupBalances,
   simplifyDebts,
   fromCents,
   toCents,

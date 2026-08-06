@@ -165,14 +165,18 @@ router.get(
   asyncHandler(async (req, res) => {
     const { groupId, friendId, limit } = req.query;
     const cap = Math.min(Number(limit) || 50, 200);
+    // Independent of whichever branch below runs — fetch it concurrently
+    // instead of after.
+    const mePromise = getUserById(req.userId);
     let rows;
 
     if (groupId) {
-      if (!(await isGroupMember(Number(groupId), req.userId))) return res.status(403).json({ error: 'Not a member of this group' });
-      rows = await db.all('SELECT * FROM expenses WHERE group_id = ? AND deleted = 0 ORDER BY date DESC, id DESC LIMIT ?', [
-        Number(groupId),
-        cap,
+      const [isMember, groupRows] = await Promise.all([
+        isGroupMember(Number(groupId), req.userId),
+        db.all('SELECT * FROM expenses WHERE group_id = ? AND deleted = 0 ORDER BY date DESC, id DESC LIMIT ?', [Number(groupId), cap]),
       ]);
+      if (!isMember) return res.status(403).json({ error: 'Not a member of this group' });
+      rows = groupRows;
     } else if (friendId) {
       const friendIdNum = Number(friendId);
       rows = await db.all(
@@ -214,7 +218,7 @@ router.get(
       );
     }
 
-    const me = await getUserById(req.userId);
+    const me = await mePromise;
     res.json({ expenses: await serializeExpenses(rows, me.default_currency) });
   })
 );
@@ -225,21 +229,28 @@ router.get(
   asyncHandler(async (req, res) => {
     const expense = await db.get('SELECT * FROM expenses WHERE id = ? AND deleted = 0', [req.params.id]);
     if (!expense) return res.status(404).json({ error: 'Expense not found' });
-    if (expense.group_id) {
-      if (!(await isGroupMember(expense.group_id, req.userId))) return res.status(403).json({ error: 'Not authorized' });
-    } else if (!(await isExpenseParticipant(expense.id, req.userId))) {
-      return res.status(403).json({ error: 'Not authorized' });
-    }
-    const commentRows = await db.all('SELECT * FROM comments WHERE expense_id = ? ORDER BY created_at ASC', [expense.id]);
-    const commentUserById = await getUsersByIds(commentRows.map((c) => c.user_id));
+
+    // Same trade as elsewhere: run the auth check alongside the data it
+    // gates instead of after it, and eat a little wasted work on the rare
+    // 403 path in exchange for far fewer round trips on every other one.
+    const [isAuthorized, commentRows, me] = await Promise.all([
+      expense.group_id ? isGroupMember(expense.group_id, req.userId) : isExpenseParticipant(expense.id, req.userId),
+      db.all('SELECT * FROM comments WHERE expense_id = ? ORDER BY created_at ASC', [expense.id]),
+      getUserById(req.userId),
+    ]);
+    if (!isAuthorized) return res.status(403).json({ error: 'Not authorized' });
+
+    const [commentUserById, expenseOut] = await Promise.all([
+      getUsersByIds(commentRows.map((c) => c.user_id)),
+      serializeExpense(expense, me.default_currency),
+    ]);
     const comments = commentRows.map((c) => ({
       id: c.id,
       body: c.body,
       createdAt: c.created_at,
       user: publicUser(commentUserById.get(c.user_id)),
     }));
-    const me = await getUserById(req.userId);
-    res.json({ expense: await serializeExpense(expense, me.default_currency), comments });
+    res.json({ expense: expenseOut, comments });
   })
 );
 
@@ -340,14 +351,19 @@ router.post(
     }
     const { body } = req.body || {};
     if (!body || !body.trim()) return res.status(400).json({ error: 'Comment cannot be empty' });
-    const result = await db.run('INSERT INTO comments (expense_id, user_id, body) VALUES (?, ?, ?) RETURNING id', [
-      expense.id,
-      req.userId,
-      body.trim(),
+    // RETURNING the columns we need means the insert alone gives us the
+    // whole row — no follow-up SELECT round trip required.
+    const [result, me] = await Promise.all([
+      db.run('INSERT INTO comments (expense_id, user_id, body) VALUES (?, ?, ?) RETURNING id, created_at', [
+        expense.id,
+        req.userId,
+        body.trim(),
+      ]),
+      getUserById(req.userId),
     ]);
-    const comment = await db.get('SELECT * FROM comments WHERE id = ?', [result.rows[0].id]);
+    const comment = result.rows[0];
     res.status(201).json({
-      comment: { id: comment.id, body: comment.body, createdAt: comment.created_at, user: publicUser(await getUserById(req.userId)) },
+      comment: { id: comment.id, body: body.trim(), createdAt: comment.created_at, user: publicUser(me) },
     });
   })
 );
