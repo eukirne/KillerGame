@@ -96,8 +96,9 @@ router.post(
     const payerId = Number(paidBy) || req.userId;
 
     let members = null;
+    let group = null;
     if (groupId) {
-      const group = await db.get('SELECT * FROM groups WHERE id = ?', [groupId]);
+      group = await db.get('SELECT * FROM groups WHERE id = ?', [groupId]);
       if (!group) return res.status(404).json({ error: 'Group not found' });
       if (!(await isGroupMember(groupId, req.userId))) return res.status(403).json({ error: 'Not a member of this group' });
       members = new Set(await getGroupMemberIds(groupId));
@@ -155,7 +156,7 @@ router.post(
     });
 
     const [expense, me] = await Promise.all([db.get('SELECT * FROM expenses WHERE id = ?', [expenseId]), getUserById(req.userId)]);
-    res.status(201).json({ expense: await serializeExpense(expense, me.default_currency) });
+    res.status(201).json({ expense: await serializeExpense(expense, (group && group.currency) || me.default_currency) });
   })
 );
 
@@ -169,14 +170,17 @@ router.get(
     // instead of after.
     const mePromise = getUserById(req.userId);
     let rows;
+    let groupCurrency = null;
 
     if (groupId) {
-      const [isMember, groupRows] = await Promise.all([
+      const [isMember, groupRows, groupRow] = await Promise.all([
         isGroupMember(Number(groupId), req.userId),
         db.all('SELECT * FROM expenses WHERE group_id = ? AND deleted = 0 ORDER BY date DESC, id DESC LIMIT ?', [Number(groupId), cap]),
+        db.get('SELECT currency FROM groups WHERE id = ?', [Number(groupId)]),
       ]);
       if (!isMember) return res.status(403).json({ error: 'Not a member of this group' });
       rows = groupRows;
+      groupCurrency = groupRow ? groupRow.currency : null;
     } else if (friendId) {
       const friendIdNum = Number(friendId);
       rows = await db.all(
@@ -219,7 +223,7 @@ router.get(
     }
 
     const me = await mePromise;
-    res.json({ expenses: await serializeExpenses(rows, me.default_currency) });
+    res.json({ expenses: await serializeExpenses(rows, groupCurrency || me.default_currency) });
   })
 );
 
@@ -233,16 +237,18 @@ router.get(
     // Same trade as elsewhere: run the auth check alongside the data it
     // gates instead of after it, and eat a little wasted work on the rare
     // 403 path in exchange for far fewer round trips on every other one.
-    const [isAuthorized, commentRows, me] = await Promise.all([
+    const [isAuthorized, commentRows, me, groupRow] = await Promise.all([
       expense.group_id ? isGroupMember(expense.group_id, req.userId) : isExpenseParticipant(expense.id, req.userId),
       db.all('SELECT * FROM comments WHERE expense_id = ? ORDER BY created_at ASC', [expense.id]),
       getUserById(req.userId),
+      expense.group_id ? db.get('SELECT currency FROM groups WHERE id = ?', [expense.group_id]) : null,
     ]);
     if (!isAuthorized) return res.status(403).json({ error: 'Not authorized' });
 
+    const effectiveCurrency = (groupRow && groupRow.currency) || me.default_currency;
     const [commentUserById, expenseOut] = await Promise.all([
       getUsersByIds(commentRows.map((c) => c.user_id)),
-      serializeExpense(expense, me.default_currency),
+      serializeExpense(expense, effectiveCurrency),
     ]);
     const comments = commentRows.map((c) => ({
       id: c.id,
@@ -319,8 +325,12 @@ router.put(
       }
     });
 
-    const [updated, me] = await Promise.all([db.get('SELECT * FROM expenses WHERE id = ?', [expense.id]), getUserById(req.userId)]);
-    res.json({ expense: await serializeExpense(updated, me.default_currency) });
+    const [updated, me, groupRow] = await Promise.all([
+      db.get('SELECT * FROM expenses WHERE id = ?', [expense.id]),
+      getUserById(req.userId),
+      expense.group_id ? db.get('SELECT currency FROM groups WHERE id = ?', [expense.group_id]) : null,
+    ]);
+    res.json({ expense: await serializeExpense(updated, (groupRow && groupRow.currency) || me.default_currency) });
   })
 );
 

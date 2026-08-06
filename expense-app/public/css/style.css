@@ -208,6 +208,18 @@ input:focus, select:focus { outline: 2px solid var(--primary); outline-offset: -
 .list-balance-converted { font-size: 11px; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
 .activity-row { cursor: default; }
 
+.group-balance-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  font-size: 14px;
+}
+.group-balance-footer-label { font-weight: 600; color: var(--text-muted); }
+.group-balance-footer .list-balance { font-size: 15px; }
+
 .member-avatars { display: flex; align-items: center; gap: -6px; margin-top: 6px; }
 .member-avatars .avatar { margin-right: -8px; border: 2px solid var(--card); }
 .member-count { margin-left: 12px; font-size: 12px; color: var(--text-muted); }

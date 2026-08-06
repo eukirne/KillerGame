@@ -12,6 +12,11 @@ const Views = (() => {
     return amount > 0 ? `owes you ${Fmt.money(amount, currency)}` : `you owe ${Fmt.money(-amount, currency)}`;
   }
 
+  function groupBalanceLabel(amount, currency) {
+    if (Math.abs(amount) < 0.005) return 'Settled up';
+    return amount > 0 ? `You are owed ${Fmt.money(amount, currency)}` : `You owe ${Fmt.money(-amount, currency)}`;
+  }
+
   function expenseAmountHtml(e, extraClass = '') {
     const main = `<span class="list-balance ${extraClass}">${Fmt.money(e.amount, e.currency)}</span>`;
     if (e.convertedAmount == null || e.convertedCurrency === e.currency) return main;
@@ -158,6 +163,8 @@ const Views = (() => {
       Api.get(`/expenses?groupId=${id}`),
     ]);
 
+    const myBalance = netBalances[App.currentUser.id] || 0;
+
     root.innerHTML = `
       <div class="detail-header">
         <div>
@@ -165,6 +172,7 @@ const Views = (() => {
           <div class="member-avatars">${group.members.map((m) => avatar(m, 'sm')).join('')}<span class="member-count">${group.members.length} ${group.members.length === 1 ? 'member' : 'members'}</span></div>
         </div>
         <div class="detail-actions">
+          <button class="btn btn-secondary" id="group-edit-btn">Edit</button>
           <button class="btn btn-secondary" id="group-invite-btn">Add member</button>
           <button class="btn btn-primary" id="group-add-expense-btn">Add expense</button>
         </div>
@@ -177,6 +185,10 @@ const Views = (() => {
 
       <div id="tab-expenses" class="tab-panel">
         ${expenses.length === 0 ? emptyState('No expenses yet', 'Add the first expense for this group.') : expensesList(expenses)}
+        <div class="group-balance-footer">
+          <span class="group-balance-footer-label">Your balance</span>
+          <span class="list-balance ${balanceClass(myBalance)}">${groupBalanceLabel(myBalance, currency)}</span>
+        </div>
       </div>
       <div id="tab-balances" class="tab-panel hidden">
         ${balancesPanel(group, netBalances, pairwiseBalances, simplifiedDebts, id, currency)}
@@ -195,6 +207,7 @@ const Views = (() => {
     document.getElementById('group-invite-btn').addEventListener('click', () =>
       openInviteModal(id, group.members.map((m) => m.id))
     );
+    document.getElementById('group-edit-btn').addEventListener('click', () => openEditGroupModal(group));
 
     root.querySelectorAll('[data-expense-id]').forEach((row) =>
       row.addEventListener('click', () => openExpenseDetail(Number(row.dataset.expenseId), group.members))
@@ -498,18 +511,28 @@ const Views = (() => {
   // ---------- Shared modals ----------
   async function openCreateGroupModal() {
     const pickerHtml = await friendsPickerHtml();
+    const me = App.currentUser;
+    const currencyOptions = CURRENCIES.map((c) => `<option value="${c}">${c}</option>`).join('');
     Modal.open(
       `
       <h2>Create a group</h2>
       <div id="group-error" class="auth-error hidden"></div>
       <div class="field"><label>Group name</label><input type="text" id="new-group-name" placeholder="e.g. Apartment 4B"/></div>
-      <div class="field"><label>Type</label>
-        <select id="new-group-type">
-          <option value="home">Home</option>
-          <option value="trip">Trip</option>
-          <option value="couple">Couple</option>
-          <option value="other" selected>Other</option>
-        </select>
+      <div class="field-row">
+        <div class="field"><label>Type</label>
+          <select id="new-group-type">
+            <option value="home">Home</option>
+            <option value="trip">Trip</option>
+            <option value="couple">Couple</option>
+            <option value="other" selected>Other</option>
+          </select>
+        </div>
+        <div class="field"><label>Group currency</label>
+          <select id="new-group-currency">
+            <option value="">Use my default (${me.defaultCurrency || 'USD'})</option>
+            ${currencyOptions}
+          </select>
+        </div>
       </div>
       <div class="field"><label>Add friends</label>${pickerHtml}</div>
       <button type="button" class="btn-link" id="toggle-email-invite">Invite by email instead</button>
@@ -522,6 +545,7 @@ const Views = (() => {
     document.getElementById('new-group-submit').addEventListener('click', async () => {
       const name = document.getElementById('new-group-name').value.trim();
       const type = document.getElementById('new-group-type').value;
+      const currency = document.getElementById('new-group-currency').value;
       const memberIds = Array.from(document.querySelectorAll('.friend-picker-check:checked')).map((el) => Number(el.value));
       const emailsField = document.getElementById('new-group-emails');
       const memberEmails = emailsField
@@ -532,13 +556,58 @@ const Views = (() => {
         return;
       }
       try {
-        const { group, notFound } = await Api.post('/groups', { name, type, memberIds, memberEmails });
+        const { group, notFound } = await Api.post('/groups', { name, type, currency, memberIds, memberEmails });
         Modal.close();
         Toast.show('Group created');
         if (notFound && notFound.length) Toast.show(`No account found for: ${notFound.join(', ')}`, 'error');
         location.hash = `#/groups/${group.id}`;
       } catch (e) {
         showFieldError('group-error', e.message);
+      }
+    });
+  }
+
+  function openEditGroupModal(group) {
+    const currencyOptions = CURRENCIES.map(
+      (c) => `<option value="${c}" ${group.currencyOverride === c ? 'selected' : ''}>${c}</option>`
+    ).join('');
+    Modal.open(`
+      <h2>Edit group</h2>
+      <div id="edit-group-error" class="auth-error hidden"></div>
+      <div class="field"><label>Group name</label><input type="text" id="edit-group-name" value="${Fmt.escapeHtml(group.name)}"/></div>
+      <div class="field-row">
+        <div class="field"><label>Type</label>
+          <select id="edit-group-type">
+            <option value="home" ${group.type === 'home' ? 'selected' : ''}>Home</option>
+            <option value="trip" ${group.type === 'trip' ? 'selected' : ''}>Trip</option>
+            <option value="couple" ${group.type === 'couple' ? 'selected' : ''}>Couple</option>
+            <option value="other" ${group.type === 'other' ? 'selected' : ''}>Other</option>
+          </select>
+        </div>
+        <div class="field"><label>Group currency</label>
+          <select id="edit-group-currency">
+            <option value="" ${!group.currencyOverride ? 'selected' : ''}>Use my default currency</option>
+            ${currencyOptions}
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-block" id="edit-group-submit">Save changes</button>
+    `);
+    document.getElementById('edit-group-submit').addEventListener('click', async () => {
+      const name = document.getElementById('edit-group-name').value.trim();
+      const type = document.getElementById('edit-group-type').value;
+      const currency = document.getElementById('edit-group-currency').value;
+      if (!name) {
+        showFieldError('edit-group-error', 'Please enter a group name');
+        return;
+      }
+      try {
+        await Api.put(`/groups/${group.id}`, { name, type, currency });
+        Modal.close();
+        Toast.show('Group updated');
+        App.refreshCurrentView();
+      } catch (e) {
+        showFieldError('edit-group-error', e.message);
       }
     });
   }

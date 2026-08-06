@@ -16,7 +16,13 @@ const asyncHandler = require('../utils/asyncHandler');
 
 const router = express.Router();
 
-async function groupSummary(group, userId, currency) {
+const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'INR', 'MXN', 'BRL', 'CHF'];
+
+// A group's `currency` column, when set, overrides every member's own
+// default currency for that group's balances — everyone sees the same
+// numbers instead of each person's own converted view.
+async function groupSummary(group, userId, fallbackCurrency) {
+  const currency = group.currency || fallbackCurrency;
   const memberIds = await getGroupMemberIds(group.id);
   // Both only depend on memberIds, not on each other — one round trip.
   const [userById, net] = await Promise.all([getUsersByIds(memberIds), getGroupNetPositions(group.id, memberIds, currency)]);
@@ -26,6 +32,7 @@ async function groupSummary(group, userId, currency) {
     name: group.name,
     type: group.type,
     createdBy: group.created_by,
+    currencyOverride: group.currency || null,
     members,
     yourBalanceCents: net.get(userId) || 0,
     currency,
@@ -55,13 +62,16 @@ router.post(
   '/',
   requireAuth,
   asyncHandler(async (req, res) => {
-    const { name, type, memberIds, memberEmails } = req.body || {};
+    const { name, type, currency, memberIds, memberEmails } = req.body || {};
     if (!name || !name.trim()) return res.status(400).json({ error: 'Group name is required' });
+    const cleanCurrency = currency ? String(currency).toUpperCase() : null;
+    if (cleanCurrency && !CURRENCIES.includes(cleanCurrency)) return res.status(400).json({ error: 'Unsupported currency' });
 
     const { groupId, invited, notFriends, notFound } = await db.transaction(async (tx) => {
-      const result = await tx.run('INSERT INTO groups (name, type, created_by) VALUES (?, ?, ?) RETURNING id', [
+      const result = await tx.run('INSERT INTO groups (name, type, currency, created_by) VALUES (?, ?, ?, ?) RETURNING id', [
         name.trim(),
         type || 'other',
+        cleanCurrency,
         req.userId,
       ]);
       const groupId = result.rows[0].id;
@@ -130,7 +140,7 @@ router.get(
     if (!group) return res.status(404).json({ error: 'Group not found' });
     if (!isMember) return res.status(403).json({ error: 'Not a member of this group' });
 
-    const currency = me.default_currency;
+    const currency = group.currency || me.default_currency;
 
     // Also independent of each other — both only need memberIds/currency.
     const [userById, { net, pairwise: pairwiseRaw }] = await Promise.all([
@@ -156,7 +166,14 @@ router.get(
     }));
 
     res.json({
-      group: { id: group.id, name: group.name, type: group.type, createdBy: group.created_by, members },
+      group: {
+        id: group.id,
+        name: group.name,
+        type: group.type,
+        createdBy: group.created_by,
+        currencyOverride: group.currency || null,
+        members,
+      },
       netBalances: netOut,
       pairwiseBalances: pairwise,
       simplifiedDebts: simplified,
@@ -173,12 +190,27 @@ router.put(
     const [group, isMember] = await Promise.all([db.get('SELECT * FROM groups WHERE id = ?', [groupId]), isGroupMember(groupId, req.userId)]);
     if (!group) return res.status(404).json({ error: 'Group not found' });
     if (!isMember) return res.status(403).json({ error: 'Not a member of this group' });
-    const { name, type } = req.body || {};
-    await db.run('UPDATE groups SET name = COALESCE(?, name), type = COALESCE(?, type) WHERE id = ?', [
-      name && name.trim() ? name.trim() : null,
-      type || null,
-      groupId,
-    ]);
+
+    const { name, type, currency } = req.body || {};
+    const updates = {};
+    if (name && name.trim()) updates.name = name.trim();
+    if (type) updates.type = type;
+    // currency is explicitly settable back to null (an empty string clears
+    // the override), unlike name/type which just leave the old value alone
+    // when omitted — so it's checked separately rather than folded into
+    // the `name && ...` / `type && ...` pattern above.
+    if (currency !== undefined) {
+      const cleanCurrency = currency ? String(currency).toUpperCase() : null;
+      if (cleanCurrency && !CURRENCIES.includes(cleanCurrency)) return res.status(400).json({ error: 'Unsupported currency' });
+      updates.currency = cleanCurrency;
+    }
+
+    const keys = Object.keys(updates);
+    if (keys.length) {
+      const setClause = keys.map((k) => `${k} = ?`).join(', ');
+      await db.run(`UPDATE groups SET ${setClause} WHERE id = ?`, [...keys.map((k) => updates[k]), groupId]);
+    }
+
     const [me, updated] = await Promise.all([getUserById(req.userId), db.get('SELECT * FROM groups WHERE id = ?', [groupId])]);
     res.json({ group: await groupSummary(updated, req.userId, me.default_currency) });
   })

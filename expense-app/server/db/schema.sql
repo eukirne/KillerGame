@@ -39,6 +39,10 @@ CREATE TABLE IF NOT EXISTS groups (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- NULL means "no override" — balances for the group fall back to each
+-- viewing member's own default currency, same as before this column existed.
+ALTER TABLE groups ADD COLUMN IF NOT EXISTS currency TEXT;
+
 CREATE TABLE IF NOT EXISTS group_members (
   group_id INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
